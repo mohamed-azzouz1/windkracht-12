@@ -1,0 +1,109 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use App\Models\Student;
+use App\Models\Instructor;
+use App\Models\Registration;
+use Carbon\Carbon;
+
+class DashboardController extends Controller
+{
+    /**
+     * Show the appropriate dashboard based on user role.
+     */
+    public function index()
+    {
+        $user = Auth::user();
+        
+        // Check if user is a student
+        $student = Student::where('user_id', $user->id)->first();
+        if ($student) {
+            return $this->studentDashboard($student);
+        }
+        
+        // Check if user is an instructor
+        $instructor = Instructor::where('user_id', $user->id)->first();
+        if ($instructor) {
+            return $this->instructorDashboard($instructor);
+        }
+        
+        // Default dashboard for other roles
+        return view('dashboard');
+    }
+    
+    /**
+     * Show the student dashboard.
+     */
+    private function studentDashboard($student)
+    {
+        // Get registrations for this student
+        $registrations = Registration::where('student_id', $student->id)
+            ->with(['package', 'instructor.user', 'kitesurfer'])
+            ->orderBy('start_date')
+            ->get();
+        
+        // Calculate statistics
+        $upcomingLessons = $registrations->filter(function($reg) {
+            return $reg->start_date >= now() && $reg->status != 'cancelled';
+        });
+        
+        $completedLessons = $registrations->filter(function($reg) {
+            return $reg->status == 'completed';
+        });
+        
+        $nextLesson = $upcomingLessons->first();
+        
+        return view('dashboard.student', [
+            'student' => $student,
+            'upcomingLessonsCount' => $upcomingLessons->count(),
+            'completedLessonsCount' => $completedLessons->count(),
+            'nextLesson' => $nextLesson,
+        ]);
+    }
+    
+    /**
+     * Show the instructor dashboard.
+     */
+    private function instructorDashboard($instructor)
+    {
+        // Get registrations for this instructor
+        $registrations = Registration::where('instructor_id', $instructor->id)
+            ->with(['package', 'student.user', 'kitesurfer'])
+            ->orderBy('start_date')
+            ->get();
+        
+        // Calculate statistics
+        $todayLessons = $registrations->filter(function($reg) {
+            return $reg->start_date->isToday() && $reg->status != 'cancelled';
+        });
+        
+        $upcomingWeekLessons = $registrations->filter(function($reg) {
+            return $reg->start_date >= now() && 
+                   $reg->start_date <= now()->addDays(7) && 
+                   $reg->status != 'cancelled';
+        });
+        
+        $completedLessons = $registrations->filter(function($reg) {
+            return $reg->status == 'completed';
+        });
+        
+        // Get unique student count
+        $activeStudentIds = $registrations->where('status', '!=', 'cancelled')
+            ->where('start_date', '>=', now()->subDays(30))
+            ->pluck('student_id')
+            ->unique();
+        
+        return view('dashboard.instructor', [
+            'instructor' => $instructor,
+            'todayLessons' => $todayLessons,
+            'todayLessonsCount' => $todayLessons->count(),
+            'upcomingWeekLessonsCount' => $upcomingWeekLessons->count(),
+            'completedLessonsCount' => $completedLessons->count(),
+            'activeStudentsCount' => $activeStudentIds->count(),
+            'upcomingLessons' => $upcomingWeekLessons->take(5), // Just show 5 for the preview
+        ]);
+    }
+}
