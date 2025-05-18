@@ -18,6 +18,11 @@ class DashboardController extends Controller
     {
         $user = Auth::user();
         
+        // Check if user is an admin
+        if ($user->role && $user->role->name === 'admin') {
+            return $this->adminDashboard();
+        }
+        
         // Check if user is a student
         $student = Student::where('user_id', $user->id)->first();
         if ($student) {
@@ -104,6 +109,29 @@ class DashboardController extends Controller
             'completedLessonsCount' => $completedLessons->count(),
             'activeStudentsCount' => $activeStudentIds->count(),
             'upcomingLessons' => $upcomingWeekLessons->take(5), // Just show 5 for the preview
+        ]);
+    }
+    
+    /**
+     * Show the admin dashboard.
+     */
+    private function adminDashboard()
+    {
+        // Get system statistics
+        $totalUsers = \App\Models\User::count();
+        $totalStudents = Student::count();
+        $activeInstructors = Instructor::where('is_active', true)->count();
+        $totalLessons = Registration::count();
+        
+        // Get recent activities (you might need to create an Activity model for this)
+        $recentActivities = \App\Models\Notification::latest()->take(10)->get();
+        
+        return view('dashboard.admin', [
+            'totalUsers' => $totalUsers,
+            'totalStudents' => $totalStudents,
+            'activeInstructors' => $activeInstructors,
+            'totalLessons' => $totalLessons,
+            'recentActivities' => $recentActivities,
         ]);
     }
 }
