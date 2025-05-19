@@ -5,6 +5,8 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Support\Facades\Auth;
+
 
 class AdminMiddleware
 {
@@ -17,8 +19,8 @@ class AdminMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Check if the user is admin based on role name
-        if (auth()->check() && auth()->user()->role && auth()->user()->role->name === 'admin') {
+        // Check if the user is admin based on role name using the Auth facade
+        if (Auth::check() && Auth::user()->role && Auth::user()->role->name === 'admin') {
             return $next($request);
         }
         
