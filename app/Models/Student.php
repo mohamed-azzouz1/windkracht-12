@@ -16,33 +16,23 @@ class Student extends Model
         'date_of_birth',
         'skill_level',
         'notes',
+        'address',
+        'city',
+        'postal_code',
+        'phone',
     ];
 
     protected $casts = [
         'date_of_birth' => 'date',
     ];
 
-    /**
-     * Get the user that owns the student profile.
-     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * Get the registrations for the student.
-     */
     public function registrations(): HasMany
     {
         return $this->hasMany(Registration::class);
-    }
-
-    /**
-     * Get the kitesurfer profile for the student.
-     */
-    public function kitesurfer()
-    {
-        return $this->hasOne(Kitesurfer::class);
     }
 }

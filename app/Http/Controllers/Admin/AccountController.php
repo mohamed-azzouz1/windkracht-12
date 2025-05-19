@@ -17,9 +17,26 @@ class AccountController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
-    public function index()
+    public function index(Request $request)
     {
-        $users = User::with('role')->paginate(20);
+        $query = User::with('role');
+        
+        // Apply search filter if provided
+        if ($request->has('search') && !empty($request->search)) {
+            $searchTerm = $request->search;
+            $query->where(function($q) use ($searchTerm) {
+                $q->where('name', 'like', '%' . $searchTerm . '%')
+                  ->orWhere('email', 'like', '%' . $searchTerm . '%');
+            });
+        }
+        
+        // Apply role filter if provided
+        if ($request->has('role') && !empty($request->role)) {
+            $query->where('role_id', $request->role);
+        }
+        
+        // Paginate results
+        $users = $query->paginate(20);
         
         return view('admin.accounts.index', [
             'users' => $users,
@@ -168,5 +185,78 @@ class AccountController extends Controller
         
         return redirect()->route('admin.accounts.index')
             ->with('success', 'Account succesvol verwijderd.');
+    }
+    
+    /**
+     * Change the role of a user.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function changeRole(Request $request, $id)
+    {
+        $user = User::findOrFail($id);
+        $newRoleName = $request->input('role');
+        
+        // Find the role
+        $role = Role::where('name', $newRoleName)->first();
+        
+        if (!$role) {
+            return redirect()->back()->with('error', 'De opgegeven rol bestaat niet.');
+        }
+        
+        // Update the user's role
+        $user->role_id = $role->id;
+        $user->save();
+        
+        // If changing to instructor, create an instructor profile if one doesn't exist
+        if ($newRoleName === 'instructor' && !Instructor::where('user_id', $user->id)->exists()) {
+            Instructor::create([
+                'user_id' => $user->id,
+                'is_active' => true,
+            ]);
+        }
+        
+        // If changing to student, create a student profile if one doesn't exist
+        if ($newRoleName === 'student' && !Student::where('user_id', $user->id)->exists()) {
+            Student::create([
+                'user_id' => $user->id,
+            ]);
+        }
+        
+        return redirect()->back()->with('success', 'Gebruikersrol succesvol gewijzigd naar ' . ucfirst($newRoleName) . '.');
+    }
+    
+    /**
+     * Create a profile for a user.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function createProfile($id)
+    {
+        $user = User::with('role')->findOrFail($id);
+        
+        if ($user->role->name === 'student') {
+            // Create student profile if it doesn't exist
+            if (!Student::where('user_id', $user->id)->exists()) {
+                Student::create([
+                    'user_id' => $user->id,
+                    'skill_level' => 'beginner',
+                ]);
+            }
+        } elseif ($user->role->name === 'instructor') {
+            // Create instructor profile if it doesn't exist
+            if (!Instructor::where('user_id', $user->id)->exists()) {
+                Instructor::create([
+                    'user_id' => $user->id,
+                    'is_active' => true,
+                ]);
+            }
+        }
+        
+        return redirect()->route('admin.accounts.show', $id)
+            ->with('success', 'Profiel aangemaakt. Deze kan nu verder worden ingevuld.');
     }
 }

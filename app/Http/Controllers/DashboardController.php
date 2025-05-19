@@ -40,32 +40,29 @@ class DashboardController extends Controller
     }
     
     /**
-     * Show the student dashboard.
+     * Show the student dashboard
      */
     private function studentDashboard($student)
     {
-        // Get registrations for this student
-        $registrations = Registration::where('student_id', $student->id)
-            ->with(['package', 'instructor.user', 'kitesurfer'])
+        // Check if profile is completed
+        $profileCompleted = !empty($student->address) && 
+                           !empty($student->city) && 
+                           !empty($student->phone) && 
+                           !empty($student->date_of_birth);
+        
+        // Get upcoming lessons
+        $upcomingLessons = Registration::where('student_id', $student->id)
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->where('start_date', '>=', now())
+            ->with(['package', 'instructor.user'])
             ->orderBy('start_date')
+            ->take(3)
             ->get();
-        
-        // Calculate statistics
-        $upcomingLessons = $registrations->filter(function($reg) {
-            return $reg->start_date >= now() && $reg->status != 'cancelled';
-        });
-        
-        $completedLessons = $registrations->filter(function($reg) {
-            return $reg->status == 'completed';
-        });
-        
-        $nextLesson = $upcomingLessons->first();
         
         return view('dashboard.student', [
             'student' => $student,
-            'upcomingLessonsCount' => $upcomingLessons->count(),
-            'completedLessonsCount' => $completedLessons->count(),
-            'nextLesson' => $nextLesson,
+            'profileCompleted' => $profileCompleted,
+            'upcomingLessons' => $upcomingLessons,
         ]);
     }
     

@@ -37,29 +37,49 @@ class AuthController extends Controller
         return view('auth.register');
     }
 
+    /**
+     * Handle a registration request for the application.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
     public function register(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
+            'password' => 'required|string|min:8|confirmed',
         ]);
 
-        if ($validator->fails()) {
-            return redirect('register')
-                ->withErrors($validator)
-                ->withInput();
+        // Get the student role
+        $studentRole = \App\Models\Role::where('name', 'student')->first();
+        
+        if (!$studentRole) {
+            // Create the role if it doesn't exist (failsafe)
+            $studentRole = \App\Models\Role::create([
+                'name' => 'student',
+                'description' => 'Student/Klant',
+            ]);
         }
 
-        $user = User::create([
+        // Create user with default student role
+        $user = \App\Models\User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+            'role_id' => $studentRole->id,
         ]);
 
+        // Create a student profile
+        \App\Models\Student::create([
+            'user_id' => $user->id,
+        ]);
+
+        // Log the user in
         Auth::login($user);
 
-        return redirect('dashboard');
+        // Redirect to dashboard
+        return redirect()->route('dashboard');
     }
 
     public function logout(Request $request)
