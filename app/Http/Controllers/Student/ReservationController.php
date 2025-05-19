@@ -34,9 +34,15 @@ class ReservationController extends Controller
     public function create(Request $request)
     {
         $packageId = $request->input('package_id');
+        
+        if (!$packageId) {
+            return redirect()->route('student.reservations.index')
+                ->with('error', 'Selecteer eerst een pakket om te reserveren.');
+        }
+        
         $package = Package::findOrFail($packageId);
         
-        // Get available dates (in this case, for the next 30 days)
+        // Get available dates (next 30 days)
         $availableDates = $this->getAvailableDates($package);
         
         // Get available locations
@@ -73,8 +79,20 @@ class ReservationController extends Controller
         $user = Auth::user();
         $student = Student::where('user_id', $user->id)->firstOrFail();
         
+        // Check if student profile is complete
+        if (empty($student->address) || empty($student->city) || empty($student->phone) || empty($student->date_of_birth)) {
+            return redirect()->route('student.profile.edit')
+                ->with('error', 'Vul eerst je profiel volledig in voordat je een les reserveert.');
+        }
+        
         // Assign instructor (simplified - random assignment)
         $instructors = Instructor::where('is_active', true)->get();
+        
+        if ($instructors->isEmpty()) {
+            return redirect()->back()
+                ->with('error', 'Er zijn momenteel geen instructeurs beschikbaar. Probeer het later opnieuw.');
+        }
+        
         $instructor = $instructors->random();
         
         // Calculate start and end times
@@ -272,9 +290,6 @@ class ReservationController extends Controller
         for ($date = $startDate; $date->lte($endDate); $date->addDay()) {
             // Skip dates that are already fully booked
             // This is a simplified version - in a real application you would check instructor availability
-            
-            // Skip bad weather days
-            // This is a simplified version - in a real application you might integrate with a weather API
             
             // Add to available dates
             $availableDates[] = [
