@@ -12,18 +12,33 @@ class Registration extends Model
 
     protected $fillable = [
         'student_id',
-        'instructor_id',
         'package_id',
-        'kitesurfer_id',
+        'instructor_id',
         'start_date',
         'end_date',
         'status',
-        // Add other fillable fields here
+        'is_paid',
+        'location',
+        'duo_name',
+        'duo_email',
+        'duo_phone',
+        'cancellation_reason',
+        'cancellation_type',
+        'cancelled_at',
+        'payment_date',
+        'payment_reference',
+        'payment_reported_at',
+        'payment_verified_at',
     ];
 
     protected $casts = [
         'start_date' => 'datetime',
         'end_date' => 'datetime',
+        'is_paid' => 'boolean',
+        'cancelled_at' => 'datetime',
+        'payment_date' => 'date',
+        'payment_reported_at' => 'datetime',
+        'payment_verified_at' => 'datetime',
     ];
 
     /**

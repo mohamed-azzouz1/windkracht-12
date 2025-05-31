@@ -14,6 +14,7 @@ use App\Models\Student;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Carbon\Carbon;
 
 class DatabaseSeeder extends Seeder
 {
@@ -50,6 +51,11 @@ class DatabaseSeeder extends Seeder
                 'certification' => 'IKO Level ' . rand(1, 4),
                 'years_of_experience' => rand(1, 10),
                 'is_active' => true,
+                'address' => "Strandweg $i",
+                'city' => 'Noordwijk',
+                'date_of_birth' => Carbon::now()->subYears(20 + $i)->format('Y-m-d'),
+                'bsn' => '123456' . $i . '89',
+                'phone' => '+31 06 123456' . $i . '8',
             ]);
         }
         
@@ -65,9 +71,12 @@ class DatabaseSeeder extends Seeder
             
             $students[] = Student::create([
                 'user_id' => $studentUser->id,
-                'date_of_birth' => now()->subYears(rand(18, 50))->format('Y-m-d'),
+                'date_of_birth' => Carbon::now()->subYears(18 + $i % 10)->format('Y-m-d'),
                 'skill_level' => ['beginner', 'intermediate', 'advanced'][rand(0, 2)],
-                'notes' => rand(0, 1) ? 'Some notes about this student' : null,
+                'address' => "Studentlaan $i",
+                'city' => 'Leiden',
+                'postal_code' => '2333 A' . chr(65 + $i % 26),
+                'phone' => '+31 06 987654' . $i,
             ]);
         }
         
@@ -179,105 +188,64 @@ class DatabaseSeeder extends Seeder
             }
         }
         
-        // Add 200 test lessons (registrations) for testing
-        $this->createTestLessons(200, $packages, $instructors, $students, $testStudent);
-    }
-    
-    /**
-     * Create test lessons with different statuses and dates
-     */
-    private function createTestLessons($count, $packages, $instructors, $students, $testStudent)
-    {
-        // Make sure test student has 50 lessons
-        $testStudentCount = 50;
-        $remainingCount = $count - $testStudentCount;
+        $allPackages = Package::all();
         
-        // Create lessons for test student (past, current, and upcoming)
-        for ($i = 0; $i < $testStudentCount; $i++) {
-            $package = $packages[array_rand($packages)];
-            $instructor = $instructors[array_rand($instructors)];
-            
-            // Determine dates and status
-            $dateType = $i % 3; // 0: past, 1: current, 2: upcoming
-            $status = '';
-            $startDate = null;
-            $endDate = null;
-            
-            if ($dateType === 0) { // Past lessons
-                $startDate = now()->subDays(rand(10, 60));
-                $endDate = (clone $startDate)->addHours($package->duration_hours);
-                $status = rand(0, 1) ? 'completed' : 'cancelled';
-            } elseif ($dateType === 1) { // Current lessons (today)
-                $startDate = now()->subHours(rand(1, 3));
-                $endDate = now()->addHours(rand(1, 3));
-                $status = 'confirmed';
-            } else { // Upcoming lessons
-                $startDate = now()->addDays(rand(1, 30));
-                $endDate = (clone $startDate)->addHours($package->duration_hours);
-                $status = rand(0, 10) < 8 ? 'confirmed' : 'pending';
-            }
-            
-            $registration = Registration::create([
-                'student_id' => $testStudent->id,
-                'package_id' => $package->id,
-                'instructor_id' => $instructor->id,
-                'start_date' => $startDate,
-                'end_date' => $endDate,
-                'status' => $status,
-            ]);
-            
-            // Create kitesurfer profile
-            Kitesurfer::create([
-                'registration_id' => $registration->id,
-                'instructor_id' => $instructor->id,
-                'skill_level' => ['beginner', 'intermediate', 'advanced'][rand(0, 2)],
-                'has_own_equipment' => (bool)rand(0, 1),
-                'equipment_needs' => rand(0, 1) ? 'Needs kite and board' : null,
-            ]);
-        }
+        // Create 100 lessons (registrations)
+        $locations = ['noordwijk', 'scheveningen', 'ijmuiden'];
+        $statuses = ['pending', 'confirmed', 'cancelled', 'completed'];
+        $startDate = Carbon::now()->subMonths(3);
         
-        // Create remaining lessons for random students
-        for ($i = 0; $i < $remainingCount; $i++) {
-            $package = $packages[array_rand($packages)];
-            $instructor = $instructors[array_rand($instructors)];
+        for ($i = 0; $i < 100; $i++) {
             $student = $students[array_rand($students)];
+            $instructor = $instructors[array_rand($instructors)];
+            $package = $allPackages->random();
+            $status = $statuses[array_rand($statuses)];
             
-            // Determine dates and status (random distribution)
-            $dateType = rand(0, 2); // 0: past, 1: current, 2: upcoming
-            $status = '';
-            $startDate = null;
-            $endDate = null;
-            
-            if ($dateType === 0) { // Past lessons
-                $startDate = now()->subDays(rand(10, 60));
-                $endDate = (clone $startDate)->addHours($package->duration_hours);
-                $status = rand(0, 1) ? 'completed' : 'cancelled';
-            } elseif ($dateType === 1) { // Current lessons (today)
-                $startDate = now()->subHours(rand(1, 3));
-                $endDate = now()->addHours(rand(1, 3));
-                $status = 'confirmed';
-            } else { // Upcoming lessons
-                $startDate = now()->addDays(rand(1, 30));
-                $endDate = (clone $startDate)->addHours($package->duration_hours);
-                $status = rand(0, 10) < 8 ? 'confirmed' : 'pending';
+            // Generate random dates within a reasonable range
+            if ($status === 'completed') {
+                // Completed lessons are in the past
+                $lessonDate = Carbon::now()->subDays(rand(1, 90));
+            } elseif ($status === 'cancelled') {
+                // Cancelled lessons can be past or future
+                $lessonDate = Carbon::now()->addDays(rand(-45, 45));
+            } else {
+                // Pending and confirmed lessons are in the future
+                $lessonDate = Carbon::now()->addDays(rand(1, 60));
             }
             
+            // Set time between 9am and 3pm
+            $hour = rand(9, 15);
+            $lessonDate->setHour($hour)->setMinute(0)->setSecond(0);
+            
+            // Create the registration
             $registration = Registration::create([
                 'student_id' => $student->id,
                 'package_id' => $package->id,
                 'instructor_id' => $instructor->id,
-                'start_date' => $startDate,
-                'end_date' => $endDate,
+                'start_date' => $lessonDate,
+                'end_date' => (clone $lessonDate)->addHours($package->duration_hours),
                 'status' => $status,
+                'is_paid' => rand(0, 1),
+                'location' => $locations[array_rand($locations)],
+                'notes' => $status === 'cancelled' ? 'Geannuleerd vanwege ' . ['weersomstandigheden', 'ziekte', 'persoonlijke redenen'][rand(0, 2)] : null,
+                'cancellation_reason' => $status === 'cancelled' ? ['Te slecht weer', 'Ziek', 'Kan niet aanwezig zijn'][rand(0, 2)] : null,
+                'cancelled_at' => $status === 'cancelled' ? (clone $lessonDate)->subDays(rand(1, 7)) : null,
             ]);
             
-            // Create kitesurfer profile
+            // Add additional duo student info for duo packages
+            if ($package->max_participants > 1 && rand(0, 1)) {
+                $registration->duo_name = "Duo Partner " . ($i + 1);
+                $registration->duo_email = "duo{$i}@example.com";
+                $registration->duo_phone = "+31 06 555" . str_pad($i, 4, '0', STR_PAD_LEFT);
+                $registration->save();
+            }
+            
+            // Create kitesurfer profile for each registration
             Kitesurfer::create([
                 'registration_id' => $registration->id,
                 'instructor_id' => $instructor->id,
                 'skill_level' => ['beginner', 'intermediate', 'advanced'][rand(0, 2)],
                 'has_own_equipment' => (bool)rand(0, 1),
-                'equipment_needs' => rand(0, 1) ? 'Needs kite and board' : null,
             ]);
         }
     }

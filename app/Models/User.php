@@ -55,14 +55,40 @@ class User extends Authenticatable
         return $this->belongsTo(Role::class);
     }
 
-    public function student(): HasOne
+    /**
+     * Get the student record associated with the user.
+     */
+    public function student()
     {
         return $this->hasOne(Student::class);
     }
 
-    public function instructor(): HasOne
+    /**
+     * Get the instructor record associated with the user.
+     */
+    public function instructor()
     {
         return $this->hasOne(Instructor::class);
+    }
+
+    /**
+     * Check if the user has a specific role
+     */
+    public function hasRole($role)
+    {
+        if ($role === 'admin' && $this->is_admin) {
+            return true;
+        }
+        
+        if ($role === 'instructor' && $this->instructor) {
+            return true;
+        }
+        
+        if ($role === 'student' && $this->student) {
+            return true;
+        }
+        
+        return false;
     }
 
     public function notifications(): HasMany

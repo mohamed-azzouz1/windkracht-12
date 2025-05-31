@@ -4,174 +4,165 @@
 <div class="py-12 bg-gray-50">
     <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
         <div class="p-6 bg-white overflow-hidden shadow-xl sm:rounded-lg">
-            <h1 class="text-2xl font-bold text-blue-900 mb-6">Instructeur Dashboard</h1>
+            <h1 class="text-2xl font-bold text-blue-900 mb-6">Instructeursdashboard</h1>
             
             <!-- Welcome Message -->
             <div class="mb-8 bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
-                <p class="text-lg font-medium text-blue-800">Welkom terug, {{ Auth::user()->name }}!</p>
-                <p class="text-gray-600">Hier vind je een overzicht van je ingeplande lessen en studenten.</p>
+                <p class="text-lg font-medium text-blue-800">Welkom, {{ Auth::user()->name }}!</p>
+                <p class="text-gray-600">Beheer hier je lesschema en leerlingen.</p>
             </div>
             
-            <div class="grid md:grid-cols-2 gap-6 mb-8">
-                <!-- Instructor Stats -->
-                <div class="bg-gradient-to-br from-indigo-500 to-indigo-600 p-6 rounded-lg shadow-md text-white">
-                    <h3 class="text-xl font-bold mb-4">Mijn Statistieken</h3>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="bg-white/20 p-3 rounded-lg">
-                            <p class="text-sm opacity-80">Lessen Vandaag</p>
-                            <p class="text-2xl font-bold">{{ $todayLessonsCount ?? 0 }}</p>
+            <!-- Profile Status -->
+            @if(!$profileCompleted)
+            <div class="mb-8 bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-500">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-yellow-800">Je profiel is nog niet compleet!</h3>
+                        <div class="mt-2 text-sm text-yellow-700">
+                            <p>Om volledig gebruik te kunnen maken van alle functies, vul a.u.b. eerst je persoonsgegevens in.</p>
                         </div>
-                        <div class="bg-white/20 p-3 rounded-lg">
-                            <p class="text-sm opacity-80">Komende Week</p>
-                            <p class="text-2xl font-bold">{{ $upcomingWeekLessonsCount ?? 0 }}</p>
-                        </div>
-                        <div class="bg-white/20 p-3 rounded-lg">
-                            <p class="text-sm opacity-80">Actieve Studenten</p>
-                            <p class="text-2xl font-bold">{{ $activeStudentsCount ?? 0 }}</p>
-                        </div>
-                        <div class="bg-white/20 p-3 rounded-lg">
-                            <p class="text-sm opacity-80">Afgeronde Lessen</p>
-                            <p class="text-2xl font-bold">{{ $completedLessonsCount ?? 0 }}</p>
+                        <div class="mt-4">
+                            <div class="-mx-2 -my-1.5 flex">
+                                <a href="{{ route('instructor.profile.edit') }}" class="bg-yellow-500 px-3 py-1.5 rounded-md text-sm font-medium text-white hover:bg-yellow-600">
+                                    Profiel bijwerken
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </div>
+            </div>
+            @endif
+            
+            <!-- Stats -->
+            <div class="mb-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-indigo-600 font-medium">Vandaag</p>
+                            <p class="text-2xl font-bold text-indigo-800">{{ $todayLessons }}</p>
+                        </div>
+                        <div class="rounded-full bg-indigo-100 p-3">
+                            <svg class="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                        </div>
+                    </div>
+                    <p class="mt-2 text-sm text-indigo-600">Geplande lessen</p>
+                </div>
                 
-                <!-- Today's Schedule -->
-                <div class="border border-gray-200 rounded-lg shadow-md p-6">
-                    <h3 class="text-xl font-bold text-gray-800 mb-4">
-                        <i class="fas fa-calendar-day mr-2 text-indigo-600"></i>Vandaag's Rooster
-                    </h3>
-                    
-                    @if(isset($todayLessons) && count($todayLessons) > 0)
-                        <div class="max-h-64 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-indigo-200 scrollbar-track-gray-100">
-                            <div class="space-y-3">
-                                @foreach($todayLessons as $lesson)
-                                    <div class="border-l-4 border-indigo-500 bg-indigo-50 p-3 rounded-r-lg">
-                                        <div class="flex justify-between items-start">
-                                            <div>
-                                                <h4 class="font-bold text-indigo-800">{{ $lesson->package->name }}</h4>
-                                                <p class="text-sm text-gray-600">
-                                                    <i class="far fa-clock mr-1"></i>{{ $lesson->start_date->format('H:i') }} - {{ $lesson->end_date->format('H:i') }}
-                                                </p>
-                                            </div>
-                                            <div class="bg-white px-2 py-1 rounded text-xs font-medium 
-                                                 text-{{ $lesson->status === 'confirmed' ? 'green' : 'yellow' }}-700
-                                                 bg-{{ $lesson->status === 'confirmed' ? 'green' : 'yellow' }}-100">
-                                                {{ ucfirst($lesson->status) }}
-                                            </div>
-                                        </div>
-                                        <div class="mt-2 text-sm">
-                                            <span class="font-medium">Student:</span> {{ $lesson->student->user->name }}
-                                            @if($lesson->kitesurfer)
-                                                <span class="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs">
-                                                    {{ ucfirst($lesson->kitesurfer->skill_level) }}
-                                                </span>
-                                            @endif
-                                        </div>
-                                        <div class="mt-2">
-                                            <a href="{{ route('lessons.instructor') }}" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded">
-                                                Details
-                                            </a>
-                                        </div>
-                                    </div>
-                                @endforeach
-                            </div>
+                <div class="bg-green-50 p-4 rounded-lg border border-green-100">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-green-600 font-medium">Deze week</p>
+                            <p class="text-2xl font-bold text-green-800">{{ $weekLessons }}</p>
                         </div>
-                    @else
-                        <div class="text-center py-8">
-                            <p class="text-gray-500">Je hebt vandaag geen lessen ingepland.</p>
-                            <p class="text-sm text-gray-400 mt-1">Geniet van je vrije dag!</p>
+                        <div class="rounded-full bg-green-100 p-3">
+                            <svg class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
                         </div>
-                    @endif
+                    </div>
+                    <p class="mt-2 text-sm text-green-600">Geplande lessen</p>
+                </div>
+                
+                <div class="bg-purple-50 p-4 rounded-lg border border-purple-100">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-purple-600 font-medium">Totaal studenten</p>
+                            <p class="text-2xl font-bold text-purple-800">{{ $totalStudents }}</p>
+                        </div>
+                        <div class="rounded-full bg-purple-100 p-3">
+                            <svg class="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                        </div>
+                    </div>
+                    <p class="mt-2 text-sm text-purple-600">Actieve leerlingen</p>
                 </div>
             </div>
             
             <!-- Quick Actions -->
             <div class="mb-8">
-                <h3 class="text-xl font-bold text-gray-800 mb-4">Instructeur Tools</h3>
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    <a href="{{ route('lessons.instructor') }}" class="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-indigo-50 transition-colors">
-                        <span class="h-12 w-12 flex items-center justify-center bg-indigo-100 text-indigo-600 rounded-full mb-2">
-                            <i class="fas fa-calendar-alt text-xl"></i>
+                <h3 class="text-xl font-bold text-gray-800 mb-4">Snelle Acties</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <a href="{{ route('instructor.lessons.day') }}" class="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-blue-50 transition-colors">
+                        <span class="h-12 w-12 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full mb-2">
+                            <i class="fas fa-calendar-day text-xl"></i>
                         </span>
-                        <span class="text-sm font-medium text-center">Lesrooster</span>
+                        <span class="text-sm font-medium text-center">Dagoverzicht</span>
                     </a>
-                    <a href="#" class="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-indigo-50 transition-colors">
+                    <a href="{{ route('instructor.lessons.week') }}" class="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-blue-50 transition-colors">
                         <span class="h-12 w-12 flex items-center justify-center bg-green-100 text-green-600 rounded-full mb-2">
-                            <i class="fas fa-user-graduate text-xl"></i>
+                            <i class="fas fa-calendar-week text-xl"></i>
                         </span>
-                        <span class="text-sm font-medium text-center">Studenten</span>
+                        <span class="text-sm font-medium text-center">Weekoverzicht</span>
                     </a>
-                    <a href="#" class="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-indigo-50 transition-colors">
-                        <span class="h-12 w-12 flex items-center justify-center bg-yellow-100 text-yellow-600 rounded-full mb-2">
-                            <i class="fas fa-wind text-xl"></i>
+                    <a href="{{ route('instructor.students.index') }}" class="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-blue-50 transition-colors">
+                        <span class="h-12 w-12 flex items-center justify-center bg-purple-100 text-purple-600 rounded-full mb-2">
+                            <i class="fas fa-users text-xl"></i>
                         </span>
-                        <span class="text-sm font-medium text-center">Weer Report</span>
+                        <span class="text-sm font-medium text-center">Mijn Studenten</span>
                     </a>
-                    <a href="#" class="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-indigo-50 transition-colors">
-                        <span class="h-12 w-12 flex items-center justify-center bg-red-100 text-red-600 rounded-full mb-2">
-                            <i class="fas fa-exclamation-triangle text-xl"></i>
+                    <a href="{{ route('instructor.profile.edit') }}" class="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-blue-50 transition-colors">
+                        <span class="h-12 w-12 flex items-center justify-center bg-orange-100 text-orange-600 rounded-full mb-2">
+                            <i class="fas fa-user-cog text-xl"></i>
                         </span>
-                        <span class="text-sm font-medium text-center">Meld Probleem</span>
+                        <span class="text-sm font-medium text-center">Mijn Profiel</span>
                     </a>
                 </div>
             </div>
             
-            <!-- Upcoming Schedule -->
+            <!-- Upcoming Lessons -->
             <div>
-                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                    <i class="fas fa-calendar-week mr-2 text-indigo-600"></i>Aankomende Lessen
-                    <a href="{{ route('lessons.instructor') }}" class="ml-auto text-sm bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded">
-                        Bekijk Alles
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold text-gray-800">Aankomende Lessen</h3>
+                    <a href="{{ route('instructor.lessons.index') }}" class="text-sm text-blue-600 hover:text-blue-800">
+                        Alle lessen bekijken <i class="fas fa-arrow-right ml-1"></i>
                     </a>
-                </h3>
+                </div>
                 
-                @if(isset($upcomingLessons) && count($upcomingLessons) > 0)
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Datum</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Les</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acties</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-gray-200">
-                                @foreach($upcomingLessons as $lesson)
-                                <tr>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <div class="text-sm text-gray-900">{{ $lesson->start_date->format('d-m-Y') }}</div>
-                                        <div class="text-xs text-gray-500">{{ $lesson->start_date->format('H:i') }} - {{ $lesson->end_date->format('H:i') }}</div>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <div class="text-sm font-medium text-gray-900">{{ $lesson->package->name }}</div>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <div class="text-sm text-gray-900">{{ $lesson->student->user->name }}</div>
-                                        @if($lesson->kitesurfer)
-                                            <div class="text-xs text-gray-500">{{ ucfirst($lesson->kitesurfer->skill_level) }}</div>
-                                        @endif
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                              bg-{{ $lesson->status === 'confirmed' ? 'green' : 'yellow' }}-100 
-                                              text-{{ $lesson->status === 'confirmed' ? 'green' : 'yellow' }}-800">
-                                            {{ ucfirst($lesson->status) }}
-                                        </span>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        <a href="#" class="text-indigo-600 hover:text-indigo-900 mr-3">Details</a>
-                                    </td>
-                                </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
+                @if(count($upcomingLessons) > 0)
+                    <div class="bg-white rounded-lg border border-gray-200">
+                        <div class="divide-y divide-gray-200">
+                            @foreach($upcomingLessons as $lesson)
+                                <div class="p-4 hover:bg-gray-50 transition">
+                                    <div class="flex justify-between items-center">
+                                        <div>
+                                            <h4 class="font-medium text-gray-900">{{ $lesson->package->name }}</h4>
+                                            <div class="mt-1 text-sm text-gray-600">
+                                                <span class="font-medium">Datum:</span> {{ $lesson->start_date->format('d-m-Y') }}
+                                                <span class="mx-1">•</span>
+                                                <span class="font-medium">Tijd:</span> {{ $lesson->start_date->format('H:i') }} - {{ $lesson->end_date->format('H:i') }}
+                                            </div>
+                                            <div class="mt-1 text-sm text-gray-600">
+                                                <span class="font-medium">Student:</span> {{ $lesson->student->user->name }}
+                                                @if($lesson->duo_name)
+                                                <span class="text-gray-400">+</span> {{ $lesson->duo_name }}
+                                                @endif
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <a href="{{ route('instructor.lessons.show', $lesson->id) }}" class="bg-blue-500 hover:bg-blue-600 text-white text-sm py-1 px-3 rounded">
+                                                Details
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
                     </div>
                 @else
-                    <div class="text-center py-6 bg-gray-50 rounded-lg">
-                        <p class="text-gray-500">Geen aankomende lessen gevonden.</p>
+                    <div class="bg-white p-6 rounded-lg border border-gray-200 text-center">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                        </svg>
+                        <h3 class="mt-2 text-sm font-medium text-gray-900">Geen aankomende lessen</h3>
+                        <p class="mt-1 text-sm text-gray-500">Je hebt momenteel geen aankomende lessen gepland.</p>
                     </div>
                 @endif
             </div>

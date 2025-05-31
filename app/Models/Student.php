@@ -11,19 +11,19 @@ class Student extends Model
 {
     use HasFactory;
 
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array<int, string>
+     */
     protected $fillable = [
         'user_id',
-        'date_of_birth',
-        'skill_level',
-        'notes',
-    ];
-
-    protected $casts = [
-        'date_of_birth' => 'date',
+        'phone',
+        // Add any other fillable fields here
     ];
 
     /**
-     * Get the user that owns the student profile.
+     * Get the user associated with the student.
      */
     public function user(): BelongsTo
     {
@@ -36,13 +36,5 @@ class Student extends Model
     public function registrations(): HasMany
     {
         return $this->hasMany(Registration::class);
-    }
-
-    /**
-     * Get the kitesurfer profile for the student.
-     */
-    public function kitesurfer()
-    {
-        return $this->hasOne(Kitesurfer::class);
     }
 }
