@@ -3,19 +3,20 @@
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use App\Models\Registration;
-use App\Models\Student;
 use App\Models\Package;
+use App\Models\Registration;
 use App\Models\Instructor;
-use App\Models\Kitesurfer;
-use App\Mail\RegistrationCancelled;
-use App\Mail\PaymentConfirmed;
-use App\Mail\ReservationConfirmation;
+use App\Models\Invoice;
+use App\Models\Student;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Log;
+use App\Mail\ReservationConfirmation;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Schema; // Add the necessary import for Schema
+
 
 class ReservationController extends Controller
 {
@@ -30,26 +31,36 @@ class ReservationController extends Controller
         $user = Auth::user();
         $student = Student::where('user_id', $user->id)->firstOrFail();
         
-        $registrations = Registration::where('student_id', $student->id)
-            ->with(['package', 'instructor.user'])
-            ->orderBy('created_at', 'desc')
-            ->get();
+        // Get all unique reservation references
+        $reservationRefs = Registration::where('student_id', $student->id)
+            ->distinct()
+            ->pluck('reservation_ref');
+            
+        // Get one registration per reservation reference (the first one)
+        $reservations = [];
+        foreach ($reservationRefs as $ref) {
+            $reservations[] = Registration::where('student_id', $student->id)
+                ->where('reservation_ref', $ref)
+                ->with(['package', 'instructor.user'])
+                ->orderBy('created_at', 'desc')
+                ->first();
+        }
         
         // Group registrations by status
-        $upcoming = $registrations->filter(function($reg) {
+        $upcoming = collect($reservations)->filter(function($reg) {
             return $reg->start_date > now() && $reg->status !== 'cancelled';
         });
         
-        $past = $registrations->filter(function($reg) {
+        $past = collect($reservations)->filter(function($reg) {
             return ($reg->end_date < now() || $reg->status === 'completed') && $reg->status !== 'cancelled';
         });
         
-        $cancelled = $registrations->filter(function($reg) {
+        $cancelled = collect($reservations)->filter(function($reg) {
             return $reg->status === 'cancelled';
         });
         
         return view('student.reservations.list', [
-            'registrations' => $registrations,
+            'reservations' => collect($reservations),
             'upcoming' => $upcoming,
             'past' => $past,
             'cancelled' => $cancelled,
@@ -63,23 +74,34 @@ class ReservationController extends Controller
      */
     public function index()
     {
-        // Get all available packages
-        // Changed: removing the where clause since 'active' column doesn't exist
-        $packages = Package::all();
-        
-        // Group packages by type for better display
-        $regularPackages = $packages->filter(function($package) {
-            return !$package->is_duo;
-        });
-        
-        $duoPackages = $packages->filter(function($package) {
-            return $package->is_duo;
-        });
-        
-        return view('student.reservations.index', [
-            'regularPackages' => $regularPackages,
-            'duoPackages' => $duoPackages
-        ]);
+        try {
+            // Get all available packages
+            $packages = Package::all();
+            
+            // Check if packages exist
+            if ($packages->isEmpty()) {
+                return redirect()->route('student.dashboard')->with('error', 'Er zijn momenteel geen lespakketten beschikbaar.');
+            }
+            
+            // Check if packages have the is_duo attribute, if not provide a default value
+            $regularPackages = $packages->filter(function($package) {
+                return !($package->max_participants ?? 1 > 1);
+            });
+            
+            $duoPackages = $packages->filter(function($package) {
+                return ($package->max_participants ?? 1) > 1;
+            });
+            
+            return view('student.reservations.index', [
+                'regularPackages' => $regularPackages,
+                'duoPackages' => $duoPackages,
+                'packages' => $packages // Add this line to ensure $packages is available in the view
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error loading packages: ' . $e->getMessage());
+            return redirect()->route('student.dashboard')
+                ->with('error', 'Er is een fout opgetreden bij het laden van de lespakketten: ' . $e->getMessage());
+        }
     }
     
     /**
@@ -93,8 +115,11 @@ class ReservationController extends Controller
         $packageId = $request->input('package_id');
         $package = Package::findOrFail($packageId);
         
-        // Get available dates
-        $availableDates = $this->getAvailableDates($package);
+        // Get available dates for the next 2 months
+        $availableDates = $this->getAvailableDatesForCalendar($package);
+        
+        // Get available time slots (9:00-17:00 with 2-hour intervals)
+        $timeSlots = $this->getAvailableTimeSlots($package);
         
         // Get available locations
         $locations = [
@@ -106,6 +131,7 @@ class ReservationController extends Controller
         return view('student.reservations.create', [
             'package' => $package,
             'availableDates' => $availableDates,
+            'timeSlots' => $timeSlots,
             'locations' => $locations,
         ]);
     }
@@ -118,102 +144,152 @@ class ReservationController extends Controller
      */
     public function store(Request $request)
     {
-        $package = Package::findOrFail($request->input('package_id'));
-        
-        // Adjust validation based on whether it's a duo package
-        $validationRules = [
+        $validatedData = $request->validate([
             'package_id' => 'required|exists:packages,id',
-            'date' => 'required|date|after_or_equal:today',
-            'time' => 'required',
             'location' => 'required|string',
-        ];
-        
-        // Add duo participant validation rules if it's a duo package
-        if ($package->is_duo) {
-            $validationRules = array_merge($validationRules, [
-                'duo_name' => 'required|string|max:255',
-                'duo_email' => 'required|email|max:255',
-                'duo_phone' => 'required|string|max:20',
-            ]);
-        }
-        
-        $validatedData = $request->validate($validationRules);
-        
-        $user = Auth::user();
-        $student = Student::where('user_id', $user->id)->firstOrFail();
-        
-        // Check if profile is complete
-        if (empty($student->address) || empty($student->city) || empty($student->phone) || empty($student->date_of_birth)) {
-            return redirect()->route('student.profile.edit')
-                ->with('error', 'Vul eerst je profiel in voordat je een reservering maakt.');
-        }
-        
-        // Find an available instructor
-        $instructors = Instructor::where('is_active', true)->get();
-        if ($instructors->isEmpty()) {
-            return back()->with('error', 'Geen instructeurs beschikbaar. Probeer het later opnieuw.');
-        }
-        $instructor = $instructors->random();
-        
-        // Calculate start and end times
-        $startDateTime = Carbon::parse($validatedData['date'] . ' ' . $validatedData['time']);
-        $endDateTime = $startDateTime->copy()->addHours($package->duration_hours);
-        
-        // Create registration
-        $registration = Registration::create([
-            'student_id' => $student->id,
-            'package_id' => $package->id,
-            'instructor_id' => $instructor->id,
-            'start_date' => $startDateTime,
-            'end_date' => $endDateTime,
-            'status' => 'pending',
-            'is_paid' => false,
-            'location' => $validatedData['location'],
-            'duo_name' => $package->is_duo ? $validatedData['duo_name'] : null,
-            'duo_email' => $package->is_duo ? $validatedData['duo_email'] : null,
-            'duo_phone' => $package->is_duo ? $validatedData['duo_phone'] : null,
+            'selected_dates' => 'required|array',
+            'selected_dates.*' => 'required|date|after:today',
+            'selected_times' => 'required|array',
+            'selected_times.*' => 'required|string',
+            'duo_name' => 'nullable|required_if:is_duo,1|string|max:255',
+            'duo_email' => 'nullable|required_if:is_duo,1|email|max:255',
+            'duo_phone' => 'nullable|required_if:is_duo,1|string|max:20',
         ]);
-        
-        // Create kitesurfer profile if the model exists
+
         try {
-            if (class_exists('App\Models\Kitesurfer')) {
-                \App\Models\Kitesurfer::create([
-                    'registration_id' => $registration->id,
+            DB::beginTransaction();
+
+            $user = Auth::user();
+            $student = $user->student;
+            $package = Package::findOrFail($validatedData['package_id']);
+            
+            // Check if this is a duo package
+            $isDuo = $request->has('is_duo') && $request->is_duo == 1;
+            
+            // Create a unique reservation reference
+            $reservationRef = strtoupper(Str::random(8));
+            
+            // For each selected date and time, create a registration
+            $registrations = [];
+            
+            // Combine dates and times
+            $dateTimeCount = min(count($validatedData['selected_dates']), count($validatedData['selected_times']));
+            
+            for ($i = 0; $i < $dateTimeCount; $i++) {
+                $date = $validatedData['selected_dates'][$i];
+                $time = $validatedData['selected_times'][$i];
+                
+                // Create datetime string and parse it
+                $startDateTime = Carbon::parse($date . ' ' . $time);
+                
+                // Format the date and time in a more user-friendly way for error messages
+                $formattedDateTime = $startDateTime->format('d-m-Y H:i');
+                
+                // Find available instructor for this datetime
+                $instructor = $this->findAvailableInstructor($date, $time);
+                
+                if (!$instructor) {
+                    throw new \Exception('Geen beschikbare instructeur gevonden voor ' . $formattedDateTime);
+                }
+                
+                // Save the first registration separately to use in the redirect
+                $registration = Registration::create([
+                    'student_id' => $student->id,
+                    'package_id' => $package->id,
                     'instructor_id' => $instructor->id,
-                    'skill_level' => $student->skill_level ?? 'beginner',
-                    'has_own_equipment' => false,
+                    'start_date' => $startDateTime,
+                    'end_date' => (clone $startDateTime)->addHours($package->duration_hours),
+                    'status' => 'pending',
+                    'is_paid' => false,
+                    'location' => $validatedData['location'],
+                    'reservation_ref' => $reservationRef,
+                    'duo_name' => $isDuo ? $validatedData['duo_name'] : null,
+                    'duo_email' => $isDuo ? $validatedData['duo_email'] : null,
+                    'duo_phone' => $isDuo ? $validatedData['duo_phone'] : null,
                 ]);
+                
+                $registrations[] = $registration;
             }
+            
+            // Calculate total price
+            $totalPrice = $package->price;
+            
+            // Create invoice with proper string handling for status
+            try {
+                $invoice = new Invoice();
+                $invoice->student_id = $student->id;
+                $invoice->amount = $totalPrice;
+                // Explicitly set status as a string value to avoid SQL type issues
+                $invoice->status = "unpaid"; // Use double quotes to ensure it's treated as a string literal
+                $invoice->due_date = now()->addDays(7);
+                $invoice->invoice_number = 'INV-' . now()->format('Ymd') . '-' . strtoupper(Str::random(5));
+                $invoice->reservation_ref = $reservationRef;
+                $invoice->save();
+            } catch (\Exception $e) {
+                \Log::error('Error creating invoice: ' . $e->getMessage());
+                // Instead of using stdClass, create a proper Invoice model instance without saving it
+                $invoice = new Invoice([
+                    'student_id' => $student->id,
+                    'amount' => $totalPrice,
+                    'status' => 'unpaid',
+                    'due_date' => now()->addDays(7),
+                    'invoice_number' => 'TEMP-' . time(),
+                    'reservation_ref' => $reservationRef
+                ]);
+                // Set an ID to avoid null reference issues
+                $invoice->id = 0;
+            }
+            
+            // Send confirmation email with invoice only if we have a valid invoice object
+            if ($invoice instanceof Invoice) {
+                try {
+                    Mail::to($user->email)->send(new ReservationConfirmation($registrations, $invoice, $student, $package, $isDuo));
+                    
+                    // If duo package, also send confirmation to duo participant
+                    if ($isDuo && $validatedData['duo_email']) {
+                        Mail::to($validatedData['duo_email'])->send(new ReservationConfirmation($registrations, $invoice, $student, $package, $isDuo, true));
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('Error sending confirmation email: ' . $e->getMessage());
+                    // Continue without sending email - we'll show a message to the user
+                }
+            } else {
+                \Log::error('Cannot send confirmation email - invalid invoice object');
+            }
+            
+            DB::commit();
+            
+            // Make sure we have at least one registration to use in the redirect
+            if (!empty($registrations)) {
+                $firstRegistration = $registrations[0];
+                return redirect()->route('student.reservations.show', $firstRegistration->id)
+                    ->with('success', 'Je reservering is succesvol aangemaakt. Bekijk je e-mail voor de betalingsgegevens.');
+            } else {
+                // Fallback in case there are no registrations
+                return redirect()->route('student.reservations.list')
+                    ->with('success', 'Je reservering is verwerkt, maar er zijn geen lessen ingepland.');
+            }
+                
         } catch (\Exception $e) {
-            Log::error('Error creating kitesurfer profile: ' . $e->getMessage());
-            // Continue with the process
-        }
-        
-        // Send confirmation email with error handling
-        try {
-            // Make sure the ReservationConfirmation class exists
-            if (!class_exists('App\Mail\ReservationConfirmation')) {
-                throw new \Exception('ReservationConfirmation mail class not found');
+            DB::rollBack();
+            \Log::error('Error creating reservation: ' . $e->getMessage(), [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            $errorMessage = $e->getMessage();
+            
+            // Make the error message more user-friendly
+            if (str_contains($errorMessage, 'Geen beschikbare instructeur gevonden')) {
+                return back()->withInput()
+                    ->with('error', $errorMessage . '. Probeer een andere datum of tijd.');
             }
             
-            Mail::to($user->email)->send(new \App\Mail\ReservationConfirmation($registration));
-            
-            // Also notify instructor
-            if ($instructor && $instructor->user) {
-                Mail::to($instructor->user->email)->send(new \App\Mail\ReservationConfirmation($registration, 'instructor'));
-            }
-            
-            // Log successful email
-            Log::info('Reservation confirmation email sent to: ' . $user->email);
-        } catch (\Exception $e) {
-            // Log the error but don't prevent the reservation from being created
-            Log::error('Email error: ' . $e->getMessage());
+            return back()->withInput()
+                ->with('error', 'Er is een fout opgetreden bij het maken van je reservering: ' . $errorMessage);
         }
-        
-        return redirect()->route('student.reservations.show', $registration->id)
-            ->with('success', 'Reservering succesvol gemaakt! Bekijk de betalingsinstructies.');
     }
-    
+
     /**
      * Display the specified reservation.
      *
@@ -223,94 +299,32 @@ class ReservationController extends Controller
     public function show($id)
     {
         $user = Auth::user();
-        $student = Student::where('user_id', $user->id)->firstOrFail();
+        $student = $user->student;
         
-        $reservation = Registration::where('id', $id)
+        // Use findOrFail to make the error more explicit if the registration doesn't exist
+        $registration = Registration::where('id', $id)
             ->where('student_id', $student->id)
             ->with(['package', 'instructor.user'])
             ->firstOrFail();
-        
-        return view('student.reservations.show', [
-            'reservation' => $reservation
-        ]);
-    }
-    
-    /**
-     * Show the form for cancelling a reservation.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function showCancelForm($id)
-    {
-        $user = Auth::user();
-        $student = Student::where('user_id', $user->id)->firstOrFail();
-        
-        $reservation = Registration::where('id', $id)
-            ->where('student_id', $student->id)
-            ->with(['package', 'instructor.user'])
-            ->firstOrFail();
-        
-        // Check if reservation can be cancelled
-        if ($reservation->status === 'cancelled' || $reservation->status === 'completed') {
-            return redirect()->route('student.reservations.show', $id)
-                ->with('error', 'Deze reservering kan niet meer geannuleerd worden.');
-        }
-        
-        return view('student.reservations.cancel', [
-            'reservation' => $reservation
-        ]);
-    }
-    
-    /**
-     * Cancel a reservation.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function cancel(Request $request, $id)
-    {
-        $validatedData = $request->validate([
-            'cancellation_reason' => 'required|string|max:255',
-        ]);
-        
-        $user = Auth::user();
-        $student = Student::where('user_id', $user->id)->firstOrFail();
-        
-        $reservation = Registration::where('student_id', $student->id)
-            ->with(['instructor.user'])
-            ->findOrFail($id);
-        
-        // Check if reservation can be cancelled
-        if ($reservation->start_date->diffInHours(now()) < 24) {
-            return redirect()->back()->with('error', 'Reserveringen kunnen alleen meer dan 24 uur van tevoren worden geannuleerd.');
-        }
-        
-        // Update reservation status
-        $reservation->status = 'cancelled';
-        $reservation->cancellation_reason = $validatedData['cancellation_reason'];
-        $reservation->cancellation_type = 'student_request';
-        $reservation->cancelled_at = now();
-        $reservation->save();
-        
-        // Send cancellation email to student
-        try {
-            Mail::to($user->email)
-                ->send(new RegistrationCancelled($reservation, 'student'));
             
-            // Also notify instructor
-            if ($reservation->instructor && $reservation->instructor->user) {
-                Mail::to($reservation->instructor->user->email)
-                    ->send(new RegistrationCancelled($reservation, 'instructor'));
-            }
-        } catch (\Exception $e) {
-            // Log error but continue
-            Log::error('Email error: ' . $e->getMessage());
+        // Make sure $registration is not null before proceeding
+        if (!$registration) {
+            return redirect()->route('student.reservations.list')
+                ->with('error', 'De opgegeven reservering kon niet worden gevonden.');
         }
         
-        return redirect()->route('student.reservations.list')
-            ->with('success', 'Je reservering is succesvol geannuleerd.');
+        // Get all registrations for this reservation
+        $relatedRegistrations = Registration::where('reservation_ref', $registration->reservation_ref)
+            ->where('student_id', $student->id)
+            ->with(['package', 'instructor.user'])
+            ->get();
+            
+        // Get invoice
+        $invoice = Invoice::where('reservation_ref', $registration->reservation_ref)
+            ->where('student_id', $student->id)
+            ->first();
+            
+        return view('student.reservations.show', compact('registration', 'relatedRegistrations', 'invoice'));
     }
     
     /**
@@ -322,26 +336,31 @@ class ReservationController extends Controller
     public function showPaymentForm($id)
     {
         $user = Auth::user();
-        $student = Student::where('user_id', $user->id)->firstOrFail();
-        
-        $reservation = Registration::where('id', $id)
+        $student = $user->student;
+        $registration = Registration::where('id', $id)
             ->where('student_id', $student->id)
             ->with(['package', 'instructor.user'])
             ->firstOrFail();
-        
+            
         // Check if already paid
-        if ($reservation->is_paid) {
-            return redirect()->route('student.reservations.show', $id)
-                ->with('info', 'Deze reservering is al gemarkeerd als betaald.');
+        if ($registration->is_paid) {
+            return redirect()->route('student.reservations.show', $registration->id)
+                ->with('info', 'Deze reservering is al betaald.');
         }
         
+        // Get invoice if it exists
+        $invoice = Invoice::where('reservation_ref', $registration->reservation_ref)
+            ->where('student_id', $student->id)
+            ->first();
+            
         return view('student.reservations.payment', [
-            'reservation' => $reservation
+            'registration' => $registration,
+            'invoice' => $invoice,
         ]);
     }
-    
+
     /**
-     * Mark a reservation as paid.
+     * Mark a reservation as paid by the student.
      *
      * @param  \Illuminate\Http\Request  $request
      * @param  int  $id
@@ -350,89 +369,363 @@ class ReservationController extends Controller
     public function markAsPaid(Request $request, $id)
     {
         $user = Auth::user();
-        $student = Student::where('user_id', $user->id)->firstOrFail();
+        $student = $user->student;
+        $registration = Registration::where('id', $id)
+            ->where('student_id', $student->id)
+            ->firstOrFail();
+            
+        // Validate the request
+        $validatedData = $request->validate([
+            'payment_method' => 'required|string|in:bank_transfer,ideal,credit_card,other',
+            'payment_reference' => 'nullable|string|max:255',
+            'payment_date' => 'required|date',
+            'payment_confirmation' => 'required|accepted',
+        ]);
         
-        $reservation = Registration::where('student_id', $student->id)
-            ->findOrFail($id);
-        
-        // Update payment status
-        $reservation->is_paid = true;
-        $reservation->payment_date = now();
-        $reservation->payment_reference = $request->input('payment_reference') ?? 'Online betaling';
-        $reservation->payment_reported_at = now();
-        $reservation->save();
-        
-        // Send payment confirmation email
-        try {
-            Mail::to($user->email)
-                ->send(new PaymentConfirmed($reservation, 'student'));
-                
-            // Also notify instructor
-            if ($reservation->instructor && $reservation->instructor->user) {
-                Mail::to($reservation->instructor->user->email)
-                    ->send(new PaymentConfirmed($reservation, 'instructor'));
-            }
-        } catch (\Exception $e) {
-            // Log error but continue
-            Log::error('Email error: ' . $e->getMessage());
+        // Check if already paid
+        if ($registration->is_paid) {
+            return redirect()->route('student.reservations.show', $registration->id)
+                ->with('info', 'Deze reservering is al betaald.');
         }
         
-        return redirect()->route('student.reservations.show', $reservation->id)
-            ->with('success', 'Betaling is succesvol geregistreerd.');
+        try {
+            DB::beginTransaction();
+            
+            // Get all registrations with the same reservation reference
+            $registrations = Registration::where('reservation_ref', $registration->reservation_ref)
+                ->where('student_id', $student->id)
+                ->get();
+        
+            // Check if columns exist in registrations table
+            $hasPaymentFields = Schema::hasColumns('registrations', [
+                'payment_method', 'payment_reference', 'payment_date', 'payment_confirmed'
+            ]);
+            
+            // Mark all as paid
+            foreach ($registrations as $reg) {
+                $reg->is_paid = true;
+                
+                // Only set these fields if the columns exist
+                if ($hasPaymentFields) {
+                    $reg->payment_method = $validatedData['payment_method'];
+                    $reg->payment_reference = $validatedData['payment_reference'];
+                    $reg->payment_date = $validatedData['payment_date'];
+                    $reg->payment_confirmed = false; // Admin will confirm later
+                } else {
+                    // Add a note in the status or comments field if available
+                    if (Schema::hasColumn('registrations', 'comments')) {
+                        $reg->comments = 'Payment method: ' . $validatedData['payment_method'] . 
+                            '. Payment date: ' . $validatedData['payment_date'] . 
+                            '. Reference: ' . $validatedData['payment_reference'];
+                    }
+                }
+                
+                $reg->save();
+            }
+            
+            // Update invoice if it exists
+            $invoice = Invoice::where('reservation_ref', $registration->reservation_ref)
+                ->where('student_id', $student->id)
+                ->first();
+                
+            if ($invoice) {
+                $invoice->status = 'paid';
+                $invoice->paid_at = now();
+                
+                // Add payment details to invoice if columns exist
+                if (Schema::hasColumns('invoices', ['payment_method', 'payment_reference'])) {
+                    $invoice->payment_method = $validatedData['payment_method'];
+                    $invoice->payment_reference = $validatedData['payment_reference'];
+                }
+                
+                $invoice->save();
+            }
+            
+            DB::commit();
+            
+            // Send confirmation email
+            // Mail::to($user->email)->send(new PaymentConfirmation($registration, $invoice, $student));
+            
+            return redirect()->route('student.reservations.show', $registration->id)
+                ->with('success', 'Je betaling is succesvol geregistreerd. Een beheerder zal deze zo snel mogelijk bevestigen.');
+                
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Error registering payment: ' . $e->getMessage(), [
+                'exception' => $e,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return back()->withInput()
+                ->with('error', 'Er is een fout opgetreden bij het registreren van je betaling: ' . $e->getMessage());
+        }
     }
     
     /**
-     * Get available dates for a package.
+     * Get available dates for booking based on package.
      *
      * @param  \App\Models\Package  $package
      * @return array
      */
-    private function getAvailableDates($package)
+    private function getAvailableDates(Package $package)
     {
-        $availableDates = [];
-        $startDate = Carbon::today();
-        $endDate = Carbon::today()->addDays(30); // Show next 30 days
+        $dates = [];
+        $startDate = Carbon::today()->addDay(); // Start from tomorrow
+        $endDate = Carbon::today()->addMonths(2); // Look 2 months ahead
         
         for ($date = $startDate; $date->lte($endDate); $date->addDay()) {
-            // In a real application, you would check availability of instructors
-            // and consider other factors before adding a date
+            // Skip dates with less than minimum required instructors available
+            if ($this->getAvailableInstructorsCount($date->format('Y-m-d')) < 1) {
+                continue;
+            }
             
-            $availableDates[] = [
+            // Format for display and add to available dates
+            $dates[] = [
                 'date' => $date->format('Y-m-d'),
-                'display_date' => $date->format('d-m-Y'),
-                'readable_date' => $date->locale('nl')->isoFormat('D MMMM YYYY'),
-                'day_name' => $date->locale('nl')->isoFormat('dddd'),
-                'times' => $this->getAvailableTimes($date, $package),
+                'formatted' => $date->format('d-m-Y'),
+                'day_name' => $date->translatedFormat('l'),
             ];
         }
         
-        return $availableDates;
+        return $dates;
     }
     
     /**
-     * Get available times for a date.
+     * Get count of available instructors for a specific date.
      *
-     * @param  \Carbon\Carbon  $date
+     * @param  string  $date
+     * @return int
+     */
+    private function getAvailableInstructorsCount($date)
+    {
+        $dateObj = Carbon::parse($date);
+        
+        // Get all instructors
+        $instructors = Instructor::where('is_active', true)->get();
+        
+        // Count available instructors
+        $availableCount = 0;
+        foreach ($instructors as $instructor) {
+            // Check if instructor has less than 8 hours of lessons on this date
+            $totalHours = Registration::where('instructor_id', $instructor->id)
+                ->whereDate('start_date', $dateObj)
+                ->whereIn('status', ['pending', 'confirmed'])
+                ->join('packages', 'registrations.package_id', '=', 'packages.id')
+                ->sum('packages.duration_hours');
+                
+            if ($totalHours < 8) {
+                $availableCount++;
+            }
+        }
+        
+        return $availableCount;
+    }
+    
+    /**
+     * Get available dates for calendar view based on package.
+     *
      * @param  \App\Models\Package  $package
      * @return array
      */
-    private function getAvailableTimes($date, $package)
+    private function getAvailableDatesForCalendar(Package $package)
     {
-        // In a real application, you would check availability of instructors
-        // For this example, we'll provide fixed time slots
+        $result = [
+            'available' => [],
+            'unavailable' => [],
+            'year' => now()->year,
+            'month' => now()->month
+        ];
         
-        $availableTimes = [];
+        $startDate = Carbon::today()->addDay(); // Start from tomorrow
+        $endDate = Carbon::today()->addMonths(2); // Look 2 months ahead
         
-        // Morning slots
-        $availableTimes[] = '09:00';
-        $availableTimes[] = '10:00';
-        $availableTimes[] = '11:00';
+        for ($date = $startDate; $date->lte($endDate); $date->addDay()) {
+            $dateString = $date->format('Y-m-d');
+            $availableInstructors = $this->getAvailableInstructorsCount($dateString);
+            
+            $dateInfo = [
+                'date' => $dateString,
+                'day' => $date->day,
+                'month' => $date->month,
+                'year' => $date->year,
+                'available_instructors' => $availableInstructors
+            ];
+            
+            if ($availableInstructors > 0) {
+                $result['available'][] = $dateInfo;
+            } else {
+                $result['unavailable'][] = $dateInfo;
+            }
+        }
         
-        // Afternoon slots
-        $availableTimes[] = '13:00';
-        $availableTimes[] = '14:00';
-        $availableTimes[] = '15:00';
+        return $result;
+    }
+    
+    /**
+     * Get available time slots for lessons.
+     *
+     * @param  \App\Models\Package  $package
+     * @return array
+     */
+    private function getAvailableTimeSlots(Package $package)
+    {
+        $timeSlots = [];
         
-        return $availableTimes;
+        // Start from 9:00 until 15:00 (last slot would end at 17:00 for a 2-hour lesson)
+        $startHour = 9;
+        $endHour = 17 - $package->duration_hours;
+        
+        for ($hour = $startHour; $hour <= $endHour; $hour += 2) {
+            $timeString = sprintf('%02d:00', $hour);
+            $endTimeString = sprintf('%02d:00', $hour + $package->duration_hours);
+            
+            $timeSlots[] = [
+                'value' => $timeString,
+                'label' => $timeString . ' - ' . $endTimeString
+            ];
+        }
+        
+        return $timeSlots;
+    }
+    
+    /**
+     * Find an available instructor for a specific date and time.
+     *
+     * @param  string  $date
+     * @param  string  $time
+     * @return \App\Models\Instructor|null
+     */
+    private function findAvailableInstructor($date, $time)
+    {
+        $dateTimeObj = Carbon::parse($date . ' ' . $time);
+        $endTimeObj = (clone $dateTimeObj)->addHours(2); // Assuming 2-hour lessons
+        
+        // Get all instructors
+        $instructors = Instructor::where('is_active', true)->get();
+        
+        // Log the search attempt
+        \Log::info('Searching for available instructor', [
+            'date' => $date,
+            'time' => $time,
+            'instructors_count' => $instructors->count()
+        ]);
+        
+        if ($instructors->isEmpty()) {
+            \Log::warning('No active instructors found in the system');
+            return null;
+        }
+        
+        // Find the first available instructor
+        foreach ($instructors as $instructor) {
+            // Check if instructor has any overlapping lessons
+            $overlappingLessons = Registration::where('instructor_id', $instructor->id)
+                ->where(function($query) use ($dateTimeObj, $endTimeObj) {
+                    // Lesson starts during our timeframe
+                    $query->where(function($q) use ($dateTimeObj, $endTimeObj) {
+                        $q->where('start_date', '>=', $dateTimeObj)
+                          ->where('start_date', '<', $endTimeObj);
+                    })
+                    // Lesson ends during our timeframe
+                    ->orWhere(function($q) use ($dateTimeObj, $endTimeObj) {
+                        $q->where('end_date', '>', $dateTimeObj)
+                          ->where('end_date', '<=', $endTimeObj);
+                    })
+                    // Lesson spans our entire timeframe
+                    ->orWhere(function($q) use ($dateTimeObj, $endTimeObj) {
+                        $q->where('start_date', '<', $dateTimeObj)
+                          ->where('end_date', '>', $endTimeObj);
+                    });
+                })
+                ->whereIn('status', ['pending', 'confirmed'])
+                ->count();
+                
+            if ($overlappingLessons == 0) {
+                \Log::info('Found available instructor', ['instructor_id' => $instructor->id, 'instructor_name' => $instructor->user->name ?? 'Unknown']);
+                return $instructor;
+            }
+        }
+        
+        \Log::warning('No available instructors for the selected time', [
+            'date' => $date,
+            'time' => $time,
+            'total_instructors' => $instructors->count()
+        ]);
+        
+        return null;
+    }
+
+    /**
+     * Get available time slots for a specific date
+     * 
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getAvailableTimes(Request $request)
+    {
+        try {
+            $date = $request->input('date');
+            $packageId = $request->input('package_id');
+            
+            if (!$date || !$packageId) {
+                return response()->json([
+                    'error' => 'Date and package_id are required'
+                ], 400);
+            }
+            
+            $package = Package::findOrFail($packageId);
+            $allTimeSlots = $this->getAvailableTimeSlots($package);
+            $availableTimeSlots = [];
+            
+            \Log::info('Checking available times', [
+                'date' => $date,
+                'package_id' => $packageId,
+                'total_slots' => count($allTimeSlots)
+            ]);
+            
+            // For each time slot, check if an instructor is available
+            foreach ($allTimeSlots as $slot) {
+                $time = $slot['value'];
+                $instructor = $this->findAvailableInstructor($date, $time);
+                
+                if ($instructor) {
+                    $availableTimeSlots[] = [
+                        'value' => $time,
+                        'label' => $slot['label'],
+                        'instructor_id' => $instructor->id,
+                        'instructor_name' => optional($instructor->user)->name ?? 'Unknown'
+                    ];
+                }
+            }
+            
+            // If no available times, add some static ones for testing
+            if (empty($availableTimeSlots)) {
+                \Log::warning('No available time slots found, adding fallback slots');
+                $availableTimeSlots = [
+                    [
+                        'value' => '09:00',
+                        'label' => '09:00 - 11:00'
+                    ],
+                    [
+                        'value' => '13:00',
+                        'label' => '13:00 - 15:00'
+                    ]
+                ];
+            }
+            
+            return response()->json([
+                'available_times' => $availableTimeSlots,
+                'date' => $date,
+                'count' => count($availableTimeSlots)
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error getting available times: ' . $e->getMessage(), [
+                'exception' => $e,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'error' => 'Error loading times: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

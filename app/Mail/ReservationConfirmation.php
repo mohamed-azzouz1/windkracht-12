@@ -2,76 +2,71 @@
 
 namespace App\Mail;
 
-use App\Models\Registration;
+use App\Models\Invoice;
+use App\Models\Package;
+use App\Models\Student;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
-use Illuminate\Mail\Mailables\Content;
-use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Contracts\Queue\ShouldQueue;
 
 class ReservationConfirmation extends Mailable
 {
     use Queueable, SerializesModels;
 
-    /**
-     * The registration instance.
-     *
-     * @var Registration
-     */
-    public $registration;
-
-    /**
-     * The recipient type (student or instructor).
-     *
-     * @var string
-     */
-    public $recipientType;
+    public $registrations;
+    public $invoice;
+    public $student;
+    public $package;
+    public $isDuo;
+    public $isDuoRecipient;
 
     /**
      * Create a new message instance.
      *
-     * @param  \App\Models\Registration  $registration
-     * @param  string  $recipientType
+     * @param array $registrations
+     * @param Invoice $invoice
+     * @param Student $student
+     * @param Package $package
+     * @param bool $isDuo
+     * @param bool $isDuoRecipient
      * @return void
      */
-    public function __construct(Registration $registration, string $recipientType = 'student')
+    public function __construct($registrations, Invoice $invoice, Student $student, Package $package, bool $isDuo = false, bool $isDuoRecipient = false)
     {
-        $this->registration = $registration;
-        $this->recipientType = $recipientType;
+        $this->registrations = $registrations;
+        $this->invoice = $invoice;
+        $this->student = $student;
+        $this->package = $package;
+        $this->isDuo = $isDuo;
+        $this->isDuoRecipient = $isDuoRecipient;
     }
 
     /**
-     * Get the message envelope.
+     * Build the message.
      *
-     * @return \Illuminate\Mail\Mailables\Envelope
+     * @return $this
      */
-    public function envelope()
+    public function build()
     {
-        return new Envelope(
-            subject: 'Reservering Kitesurfles - Windkracht 12',
-        );
-    }
-
-    /**
-     * Get the message content definition.
-     *
-     * @return \Illuminate\Mail\Mailables\Content
-     */
-    public function content()
-    {
-        return new Content(
-            view: 'emails.reservation-confirmation',
-        );
-    }
-
-    /**
-     * Get the attachments for the message.
-     *
-     * @return array
-     */
-    public function attachments()
-    {
-        return [];
+        $subject = $this->isDuoRecipient 
+            ? 'Je bent uitgenodigd voor kitesurf lessen bij Windkracht 12' 
+            : 'Bevestiging van je reservering bij Windkracht 12';
+            
+        return $this->subject($subject)
+            ->view('emails.reservation_confirmation')
+            ->with([
+                'registrations' => $this->registrations,
+                'invoice' => $this->invoice,
+                'student' => $this->student,
+                'package' => $this->package,
+                'isDuo' => $this->isDuo,
+                'isDuoRecipient' => $this->isDuoRecipient,
+                'paymentInfo' => [
+                    'bankAccount' => 'NL12 RABO 0123 4567 89',
+                    'accountName' => 'Windkracht 12 B.V.',
+                    'reference' => $this->invoice->invoice_number,
+                ]
+            ]);
     }
 }

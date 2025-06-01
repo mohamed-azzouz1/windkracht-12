@@ -20,6 +20,8 @@ class Invoice extends Model
         'tax_amount',
         'total_amount',
         'status',
+        'student_id',       // Add this field
+        'reservation_ref',  // Add this field
     ];
 
     protected $casts = [
@@ -28,6 +30,7 @@ class Invoice extends Model
         'amount' => 'decimal:2',
         'tax_amount' => 'decimal:2',
         'total_amount' => 'decimal:2',
+        'status' => 'string',  // Explicitly cast status as string
     ];
 
     public function registration(): BelongsTo
@@ -38,5 +41,17 @@ class Invoice extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+    
+    // Add a relation to student
+    public function student(): BelongsTo
+    {
+        return $this->belongsTo(Student::class);
+    }
+    
+    // Custom setter for status to ensure it's always a string
+    public function setStatusAttribute($value)
+    {
+        $this->attributes['status'] = (string) $value;
     }
 }

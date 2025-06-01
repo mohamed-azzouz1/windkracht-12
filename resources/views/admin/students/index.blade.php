@@ -81,7 +81,7 @@
                                 <tr>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="text-sm font-medium text-gray-900">{{ $student->user->name }}</div>
-                                        <div class="text-sm text-gray-500">{{ $student->date_of_birth ? $student->date_of_birth->format('d-m-Y') : 'Onbekend' }}</div>
+                                        <div class="text-sm text-gray-500">{{ $student->formatted_date_of_birth }}</div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="text-sm text-gray-900">{{ $student->user->email }}</div>

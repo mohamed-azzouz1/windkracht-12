@@ -258,34 +258,47 @@ class InstructorController extends Controller
      */
     public function destroy($id)
     {
-        $instructor = Instructor::with('user')->findOrFail($id);
-        
         try {
             DB::beginTransaction();
             
-            // Check if this instructor has any registrations
-            $hasRegistrations = Registration::where('instructor_id', $id)->exists();
+            $instructor = Instructor::findOrFail($id);
             
-            if ($hasRegistrations) {
-                return back()->with('error', 'Deze instructeur kan niet worden verwijderd omdat er lessen aan zijn gekoppeld.');
+            // First, handle all registrations (lessons) associated with this instructor
+            $registrations = $instructor->registrations;
+            
+            if ($registrations->count() > 0) {
+                // Option 1: Delete all registrations
+                foreach ($registrations as $registration) {
+                    $registration->delete();
+                }
+                
+                // Alternative option: Mark lessons as cancelled instead of deleting
+                // foreach ($registrations as $registration) {
+                //     $registration->status = 'cancelled';
+                //     $registration->cancellation_reason = 'Instructeur verwijderd door admin';
+                //     $registration->cancellation_type = 'admin';
+                //     $registration->cancelled_at = now();
+                //     $registration->save();
+                // }
             }
             
-            // Delete instructor
+            // Then delete the instructor
             $instructor->delete();
             
-            // Delete user
-            $instructor->user->delete();
+            // Finally, we could optionally handle the associated user account
+            // $user = $instructor->user;
+            // $user->delete(); // Only if you want to delete the user account as well
             
             DB::commit();
             
             return redirect()->route('admin.instructors.index')
-                ->with('success', 'Instructeur verwijderd!');
-                
+                ->with('success', 'Instructeur en alle bijbehorende lessen zijn succesvol verwijderd.');
+    
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Error deleting instructor: ' . $e->getMessage());
+            \Log::error('Error deleting instructor: ' . $e->getMessage());
             
-            return back()->with('error', 'Er is een fout opgetreden bij het verwijderen van de instructeur: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Er is een fout opgetreden bij het verwijderen van de instructeur: ' . $e->getMessage()]);
         }
     }
 }

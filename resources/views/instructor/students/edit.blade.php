@@ -12,9 +12,25 @@
                     </a>
                 </div>
                 
+                @if(session('success'))
+                <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6" role="alert">
+                    <p>{{ session('success') }}</p>
+                </div>
+                @endif
+                
                 @if(session('error'))
                 <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert">
                     <p>{{ session('error') }}</p>
+                </div>
+                @endif
+                
+                @if ($errors->any())
+                <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert">
+                    <ul class="list-disc pl-4">
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
                 </div>
                 @endif
                 
@@ -110,22 +126,38 @@
                         </div>
                     </div>
                     
-                    <div class="flex justify-between">
-                        <form action="{{ route('instructor.students.destroy', $student->id) }}" method="POST" onsubmit="return confirm('Weet je zeker dat je deze student wilt verwijderen? Alle geplande lessen worden geannuleerd.');">
-                            @csrf
-                            @method('DELETE')
-                            <button type="submit" class="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg">
+                    <div class="flex justify-between mt-6">
+                        <a href="{{ route('instructor.students.index') }}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium py-2 px-4 rounded-lg">
+                            Annuleren
+                        </a>
+                        
+                        <div class="flex space-x-4">
+                            <button type="button" onclick="confirmDelete()" class="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg">
                                 Student Verwijderen
                             </button>
-                        </form>
-                        
-                        <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg">
-                            Wijzigingen Opslaan
-                        </button>
+                            
+                            <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg">
+                                Wijzigingen Opslaan
+                            </button>
+                        </div>
                     </div>
+                </form>
+                
+                <!-- Separate form for delete functionality -->
+                <form id="delete-form" action="{{ route('instructor.students.destroy', $student->id) }}" method="POST" class="hidden">
+                    @csrf
+                    @method('DELETE')
                 </form>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+function confirmDelete() {
+    if (confirm('Weet je zeker dat je deze student wilt verwijderen? Alle geplande lessen worden geannuleerd.')) {
+        document.getElementById('delete-form').submit();
+    }
+}
+</script>
 @endsection

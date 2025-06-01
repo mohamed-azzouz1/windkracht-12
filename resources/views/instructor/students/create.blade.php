@@ -8,7 +8,7 @@
                 <div class="flex justify-between items-center mb-6">
                     <h1 class="text-2xl font-bold text-gray-800">Nieuwe Student Toevoegen</h1>
                     <a href="{{ route('instructor.students.index') }}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded">
-                        <i class="fas fa-arrow-left mr-1"></i>Terug naar studenten
+                        <i class="fas fa-arrow-left mr-1"></i>Terug naar overzicht
                     </a>
                 </div>
                 
@@ -18,13 +18,23 @@
                 </div>
                 @endif
                 
-                <form action="{{ route('instructor.students.store') }}" method="POST">
+                @if ($errors->any())
+                <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert">
+                    <ul class="list-disc pl-4">
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+                @endif
+                
+                <form method="POST" action="{{ route('instructor.students.store') }}">
                     @csrf
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                        <!-- Account Information -->
+                        <!-- Personal Information -->
                         <div>
-                            <h3 class="text-lg font-medium text-gray-800 mb-4">Account Informatie</h3>
+                            <h3 class="text-lg font-medium text-gray-800 mb-4">Persoonlijke Informatie</h3>
                             
                             <div class="mb-4">
                                 <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Naam</label>
@@ -52,11 +62,20 @@
                                     <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
                                 @enderror
                             </div>
+                            
+                            <div class="mb-4">
+                                <label for="date_of_birth" class="block text-sm font-medium text-gray-700 mb-1">Geboortedatum</label>
+                                <input type="date" name="date_of_birth" id="date_of_birth" value="{{ old('date_of_birth') }}"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                                @error('date_of_birth')
+                                    <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
+                                @enderror
+                            </div>
                         </div>
                         
-                        <!-- Personal Information -->
+                        <!-- Contact Information -->
                         <div>
-                            <h3 class="text-lg font-medium text-gray-800 mb-4">Persoonlijke Informatie</h3>
+                            <h3 class="text-lg font-medium text-gray-800 mb-4">Contactgegevens</h3>
                             
                             <div class="mb-4">
                                 <label for="address" class="block text-sm font-medium text-gray-700 mb-1">Adres</label>
@@ -84,19 +103,10 @@
                                     <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
                                 @enderror
                             </div>
-                            
-                            <div class="mb-4">
-                                <label for="date_of_birth" class="block text-sm font-medium text-gray-700 mb-1">Geboortedatum</label>
-                                <input type="date" name="date_of_birth" id="date_of_birth" value="{{ old('date_of_birth') }}"
-                                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                                @error('date_of_birth')
-                                    <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
-                                @enderror
-                            </div>
                         </div>
                     </div>
                     
-                    <!-- Additional Information -->
+                    <!-- Kitesurfing Information -->
                     <div class="mb-6">
                         <h3 class="text-lg font-medium text-gray-800 mb-4">Kitesurfvaardigheden</h3>
                         
@@ -113,15 +123,42 @@
                         </div>
                         
                         <div class="mb-4">
+                            <label for="package_id" class="block text-sm font-medium text-gray-700 mb-1">Lespakket</label>
+                            <select id="package_id" name="package_id" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" required>
+                                <option value="">Selecteer een lespakket</option>
+                                @foreach(\App\Models\Package::where('active', true)->get() as $package)
+                                    <option value="{{ $package->id }}" {{ old('package_id') == $package->id ? 'selected' : '' }}>
+                                        {{ $package->name }} (€{{ number_format($package->price, 2, ',', '.') }})
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('package_id')
+                                <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
+                            @enderror
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="location" class="block text-sm font-medium text-gray-700 mb-1">Locatie</label>
+                            <input type="text" name="location" id="location" value="{{ old('location') }}"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                            @error('location')
+                                <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
+                            @enderror
+                        </div>
+                        
+                        <div class="mb-4">
                             <label for="notes" class="block text-sm font-medium text-gray-700 mb-1">Notities</label>
-                            <textarea id="notes" name="notes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">{{ old('notes') }}</textarea>
+                            <textarea id="notes" name="notes" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">{{ old('notes') }}</textarea>
                             @error('notes')
                                 <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
                             @enderror
                         </div>
                     </div>
                     
-                    <div class="flex justify-end">
+                    <div class="flex justify-end space-x-4">
+                        <a href="{{ route('instructor.students.index') }}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium py-2 px-4 rounded-lg">
+                            Annuleren
+                        </a>
                         <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg">
                             Student Toevoegen
                         </button>

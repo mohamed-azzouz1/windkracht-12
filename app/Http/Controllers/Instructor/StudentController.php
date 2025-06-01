@@ -100,35 +100,57 @@ class StudentController extends Controller
             'date_of_birth' => 'nullable|date|before:today',
             'skill_level' => 'nullable|string|in:beginner,intermediate,advanced',
             'notes' => 'nullable|string',
+            'package_id' => 'required|exists:packages,id', // Add package_id validation
         ]);
         
-        // Get student role
-        $studentRole = Role::where('name', 'student')->first();
-        if (!$studentRole) {
-            return back()->with('error', 'Student role not found in the system.');
+        try {
+            // Start transaction
+            \DB::beginTransaction();
+            
+            // Create user
+            $user = User::create([
+                'name' => $validatedData['name'],
+                'email' => $validatedData['email'],
+                'password' => Hash::make($validatedData['password']),
+            ]);
+            
+            // Create student record
+            $student = Student::create([
+                'user_id' => $user->id,
+                'address' => $validatedData['address'] ?? null,
+                'city' => $validatedData['city'] ?? null,
+                'phone' => $validatedData['phone'] ?? null,
+                'date_of_birth' => $validatedData['date_of_birth'] ?? null,
+                'skill_level' => $validatedData['skill_level'] ?? 'beginner',
+                'notes' => $validatedData['notes'] ?? null,
+            ]);
+            
+            // Get current instructor
+            $instructor = Auth::user()->instructor;
+            
+            // Create registration to link student with instructor including the package_id
+            Registration::create([
+                'student_id' => $student->id,
+                'instructor_id' => $instructor->id,
+                'package_id' => $validatedData['package_id'], // Include package_id
+                'status' => 'pending',
+                'start_date' => now(),
+                'end_date' => now()->addDays(30), // Set a default end date or based on package
+                'location' => $request->location ?? 'Te bepalen',
+            ]);
+            
+            \DB::commit();
+            
+            return redirect()->route('instructor.students.show', $student->id)
+                ->with('success', 'Student succesvol aangemaakt.');
+                
+        } catch (\Exception $e) {
+            \DB::rollBack();
+            \Log::error('Error creating student: ' . $e->getMessage());
+            
+            return back()->withInput()
+                ->with('error', 'Er is een fout opgetreden bij het aanmaken van de student: ' . $e->getMessage());
         }
-        
-        // Create user
-        $user = User::create([
-            'name' => $validatedData['name'],
-            'email' => $validatedData['email'],
-            'password' => Hash::make($validatedData['password']),
-            'role_id' => $studentRole->id,
-        ]);
-        
-        // Create student
-        $student = Student::create([
-            'user_id' => $user->id,
-            'address' => $validatedData['address'] ?? null,
-            'city' => $validatedData['city'] ?? null,
-            'phone' => $validatedData['phone'] ?? null,
-            'date_of_birth' => $validatedData['date_of_birth'] ?? null,
-            'skill_level' => $validatedData['skill_level'] ?? 'beginner',
-            'notes' => $validatedData['notes'] ?? null,
-        ]);
-        
-        return redirect()->route('instructor.students.show', $student->id)
-            ->with('success', 'Student succesvol aangemaakt.');
     }
     
     /**
@@ -198,7 +220,8 @@ class StudentController extends Controller
             ->exists();
             
         if (!$hasLessons) {
-            return back()->with('error', 'Je hebt geen lessen gegeven aan deze student.');
+            return redirect()->route('instructor.students.index')
+                ->with('error', 'Je hebt geen lessen gegeven aan deze student.');
         }
         
         return view('instructor.students.edit', [
@@ -215,47 +238,73 @@ class StudentController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $user = Auth::user();
-        $instructor = Instructor::where('user_id', $user->id)->firstOrFail();
-        
-        $student = Student::with('user')->findOrFail($id);
-        
-        // Validate instructor has taught this student
-        $hasLessons = Registration::where('student_id', $student->id)
-            ->where('instructor_id', $instructor->id)
-            ->exists();
+        try {
+            $user = Auth::user();
+            $instructor = Instructor::where('user_id', $user->id)->firstOrFail();
             
-        if (!$hasLessons) {
-            return back()->with('error', 'Je hebt geen lessen gegeven aan deze student.');
+            $student = Student::with('user')->findOrFail($id);
+            
+            // Validate instructor has taught this student
+            $hasLessons = Registration::where('student_id', $student->id)
+                ->where('instructor_id', $instructor->id)
+                ->exists();
+                
+            if (!$hasLessons) {
+                return redirect()->route('instructor.students.index')
+                    ->with('error', 'Je hebt geen lessen gegeven aan deze student.');
+            }
+            
+            // Validate request
+            $validatedData = $request->validate([
+                'name' => 'required|string|max:255',
+                'address' => 'nullable|string|max:255',
+                'city' => 'nullable|string|max:255',
+                'phone' => 'nullable|string|max:20',
+                'date_of_birth' => 'nullable|date|before:today',
+                'skill_level' => 'nullable|string|in:beginner,intermediate,advanced',
+                'notes' => 'nullable|string',
+            ]);
+            
+            \DB::beginTransaction();
+            
+            // Update user name
+            $studentUser = $student->user;
+            $studentUser->name = $validatedData['name'];
+            $studentUser->save();
+            
+            // Update student information
+            $student->address = $validatedData['address'];
+            $student->city = $validatedData['city'];
+            $student->phone = $validatedData['phone'];
+            $student->date_of_birth = $validatedData['date_of_birth'];
+            $student->skill_level = $validatedData['skill_level'] ?? $student->skill_level;
+            $student->notes = $validatedData['notes'];
+            $student->save();
+            
+            \DB::commit();
+            
+            // Log the successful update
+            \Log::info('Student updated successfully', [
+                'student_id' => $student->id,
+                'instructor_id' => $instructor->id,
+                'data' => $validatedData
+            ]);
+            
+            return redirect()->route('instructor.students.show', $student->id)
+                ->with('success', 'Studentgegevens zijn succesvol bijgewerkt.');
+                
+        } catch (\Exception $e) {
+            \DB::rollBack();
+            \Log::error('Error updating student: ' . $e->getMessage(), [
+                'student_id' => $id,
+                'request_data' => $request->all(),
+                'exception' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return back()->withInput()
+                ->with('error', 'Er is een fout opgetreden bij het bijwerken van de student: ' . $e->getMessage());
         }
-        
-        // Validate request
-        $validatedData = $request->validate([
-            'name' => 'required|string|max:255',
-            'address' => 'nullable|string|max:255',
-            'city' => 'nullable|string|max:255',
-            'phone' => 'nullable|string|max:20',
-            'date_of_birth' => 'nullable|date|before:today',
-            'skill_level' => 'nullable|string|in:beginner,intermediate,advanced',
-            'notes' => 'nullable|string',
-        ]);
-        
-        // Update user name
-        $studentUser = $student->user;
-        $studentUser->name = $validatedData['name'];
-        $studentUser->save();
-        
-        // Update student information
-        $student->address = $validatedData['address'];
-        $student->city = $validatedData['city'];
-        $student->phone = $validatedData['phone'];
-        $student->date_of_birth = $validatedData['date_of_birth'];
-        $student->skill_level = $validatedData['skill_level'];
-        $student->notes = $validatedData['notes'];
-        $student->save();
-        
-        return redirect()->route('instructor.students.show', $student->id)
-            ->with('success', 'Studentgegevens zijn succesvol bijgewerkt.');
     }
     
     /**
