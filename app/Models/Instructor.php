@@ -19,18 +19,15 @@ class Instructor extends Model
      */
     protected $fillable = [
         'user_id',
-        'is_active',
-        'certification',
-        'years_of_experience',
-        'specialization',
-        'biography',
+        'bio',
+        'phone',
         'address',
         'city',
+        'postal_code',
         'date_of_birth',
         'bsn',
-        'phone',
-        'bio',
-        // Add any other fillable fields here
+        'is_active',
+        'hourly_rate',
     ];
 
     /**
@@ -39,8 +36,9 @@ class Instructor extends Model
      * @var array<string, string>
      */
     protected $casts = [
-        'is_active' => 'boolean',
         'date_of_birth' => 'date',
+        'is_active' => 'boolean',
+        'hourly_rate' => 'decimal:2',
     ];
 
     /**

@@ -80,17 +80,18 @@
             transition: max-height 0.3s ease;
         }
         
-        /* Fixed background image loading */
+        /* Fixed background image loading with fallback */
         .hero-image {
             background-image: url('https://source.unsplash.com/featured/1600x900/?kitesurfing,ocean');
             background-size: cover;
             background-position: center;
         }
         
-        /* Make image cards pulse on hover */
-        .card-hover:hover {
-            animation: pulse 1.5s infinite;
-        }
+        /* Color fallbacks for images */
+        .kitesurf-bg-1 { background-color: #0284c7; }
+        .kitesurf-bg-2 { background-color: #0369a1; }
+        .kitesurf-bg-3 { background-color: #0ea5e9; }
+        .kitesurf-bg-4 { background-color: #38bdf8; }
         
         /* Smooth scrolling without JS */
         html {
@@ -176,7 +177,8 @@
     <!-- Hero Section -->
     <header id="home" class="relative bg-gradient-to-r from-blue-900 to-blue-700 text-white">
         <div class="absolute inset-0 overflow-hidden">
-            <img src="{{ asset('img/kitesurf-hero.jpg') }}" alt="Kitesurfing" class="w-full h-full object-cover opacity-40" onerror="this.src='https://source.unsplash.com/featured/1600x900/?kitesurfing,ocean'">
+            <!-- Replace direct img reference with inline style + fallback color -->
+            <div class="w-full h-full bg-blue-800 opacity-40 hero-image"></div>
             <div class="absolute inset-0 bg-gradient-to-r from-blue-900 via-blue-800 to-transparent opacity-70"></div>
         </div>
         
@@ -245,14 +247,16 @@
                 <!-- Main feature image with overlay design -->
                 <div class="relative">
                     <div class="absolute inset-0 bg-blue-900 rounded-lg transform translate-x-4 translate-y-4 opacity-20"></div>
-                    <img src="{{ asset('img/kitesurf-1.jpg') }}" alt="Kitesurfing in Action" class="rounded-lg shadow-xl relative z-10 w-full h-full object-cover" onerror="this.src='https://source.unsplash.com/random/800x600/?kitesurfing,action'">
+                    <!-- Replace direct img reference with div that has background image fallback -->
+                    <div class="rounded-lg shadow-xl relative z-10 w-full h-full min-h-[350px] kitesurf-bg-1 hero-image"></div>
                 </div>
             </div>
             
             <!-- Photo gallery with 3 images -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-16">
                 <div class="overflow-hidden rounded-lg shadow-lg group">
-                    <img src="{{ asset('img/kitesurf-2.jpg') }}" alt="Kitesurfing Lesson on Beach" class="w-full h-64 object-cover transition-transform duration-500 group-hover:scale-110" onerror="this.src='https://source.unsplash.com/random/600x400/?kitesurfing,beach'">
+                    <!-- Replace direct img reference with div that has background image fallback -->
+                    <div class="w-full h-64 kitesurf-bg-2 transition-transform duration-500 group-hover:scale-110 hero-image"></div>
                     <div class="p-4 bg-white">
                         <h4 class="font-bold text-blue-900">Lessen op het strand</h4>
                         <p class="text-sm text-gray-600">Eerste stappen op veilig terrein</p>
@@ -260,7 +264,8 @@
                 </div>
                 
                 <div class="overflow-hidden rounded-lg shadow-lg group">
-                    <img src="{{ asset('img/kitesurf-3.jpg') }}" alt="Kitesurfing Water Practice" class="w-full h-64 object-cover transition-transform duration-500 group-hover:scale-110" onerror="this.src='https://source.unsplash.com/random/600x400/?kitesurfing,water'">
+                    <!-- Replace direct img reference with div that has background image fallback -->
+                    <div class="w-full h-64 kitesurf-bg-3 transition-transform duration-500 group-hover:scale-110 hero-image"></div>
                     <div class="p-4 bg-white">
                         <h4 class="font-bold text-blue-900">Praktijk op het water</h4>
                         <p class="text-sm text-gray-600">Leer op een veilige manier het water op</p>
@@ -268,7 +273,8 @@
                 </div>
                 
                 <div class="overflow-hidden rounded-lg shadow-lg group">
-                    <img src="{{ asset('img/kitesurf-4.jpg') }}" alt="Kitesurfing Jump" class="w-full h-64 object-cover transition-transform duration-500 group-hover:scale-110" onerror="this.src='https://source.unsplash.com/random/600x400/?kitesurfing,jump'">
+                    <!-- Replace direct img reference with div that has background image fallback -->
+                    <div class="w-full h-64 kitesurf-bg-4 transition-transform duration-500 group-hover:scale-110 hero-image"></div>
                     <div class="p-4 bg-white">
                         <h4 class="font-bold text-blue-900">Gevorderde technieken</h4>
                         <p class="text-sm text-gray-600">Leer springen en andere coole tricks</p>
@@ -576,31 +582,12 @@
             <div class="border-t border-blue-800 mt-8 pt-8 flex flex-col md:flex-row justify-between items-center">
                 <p>&copy; {{ date('Y') }} Windkracht 12. Alle rechten voorbehouden.</p>
                 <div class="mt-4 md:mt-0">
-                    <!-- Replace external image with inline SVG to avoid loading errors -->
+                    <!-- Fix the SVG that was incomplete -->
                     <div class="h-8 flex items-center space-x-2">
                         <span class="text-white text-xs">Betaalmethoden:</span>
                         <svg class="h-6 w-auto" viewBox="0 0 38 24" xmlns="http://www.w3.org/2000/svg">
                             <g fill="none" fill-rule="evenodd">
                                 <rect fill="#FFF" width="38" height="24" rx="3"/>
-                                <path d="M1 19.001h36M1 5h36" stroke="#E6E6E6"/>
-                                <circle fill="#F7B600" cx="15.6" cy="12" r="6.6"/>
-                                <path d="M15.6 5.4a6.6 6.6 0 1 0 0 13.2A6.6 6.6 0 0 0 15.6 5.4z" fill="#F7B600"/>
-                                <path d="M15.6 5.4a6.6 6.6 0 1 0 0 13.2A6.6 6.6 0 0 0 15.6 5.4z" stroke="#E6E6E6"/>
-                                <path d="M15.6 5.4a6.6 6.6 0 1 0 0 13.2A6.6 6.6 0 0 0 15.6 5.4z" stroke="#E6E6E6"/>
-                                <path d="M15.6 5.4a6.6 6.6 0 1 0 0 13.2A6.6 6.6 0 0 0 15.6 5.4z" stroke="#E6E6E6"/>
-                                <path d="M15.6 5.4a6.6 6.6 0 1 0 0 13.2A6.6 6.6 0 0 0 15.6 5.4z" stroke="#E6E6E6"/>
-                            </g>
-                        </svg>
-                        <svg class="h-6 w-auto
-
-                            <g fill="none" fill-rule="evenodd">
-                                <path d="M1 19.001h36M1 5h36" stroke="#E6E6E6"/>
-                                <circle fill="#F7B600" cx="15.6" cy="12" r="6.6"/>
-                                <path d="M15.6 5.4a6.6 6.6 0 1 0 0 13.2A6.6 6.6 0 0 0 15.6 5.4z" fill="#F7B600"/>
-                            </g>
-                            <path d="M1 19.001h36M1 5h36" stroke="#E6E6E6"/>
-" viewBox="0 0 38 24" xmlns="http://www.w3.org/2000/svg">
-                            <g fill="none" fill-rule="evenodd">
                                 <path d="M1 19.001h36M1 5h36" stroke="#E6E6E6"/>
                                 <circle fill="#F7B600" cx="15.6" cy="12" r="6.6"/>
                                 <path d="M15.6 5.4a6.6 6.6 0 1 0 0 13.2A6.6 6.6 0 0 0 15.6 5.4z" fill="#F7B600"/>
@@ -613,14 +600,25 @@
     </footer>
 
     <!-- Scripts -->
-    <script src="https://kit.fontawesome.com/a076d05399.js"></script>
-    <script src="{{ asset('js/app.js') }}"></script>
     <script>
+        // Replace FontAwesome from external source that is causing errors
+        if (!document.getElementById('fa-custom-link')) {
+            const faLink = document.createElement('link');
+            faLink.id = 'fa-custom-link';
+            faLink.rel = 'stylesheet';
+            faLink.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css';
+            faLink.integrity = 'sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==';
+            faLink.crossOrigin = 'anonymous';
+            faLink.referrerPolicy = 'no-referrer';
+            document.head.appendChild(faLink);
+        }
+        
         // Mobile menu toggle
         document.getElementById('mobile-menu-button').addEventListener('click', function() {
             const mobileMenu = document.getElementById('mobile-menu');
             mobileMenu.classList.toggle('hidden');
         });
+        
         // Smooth scroll for anchor links
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function(e) {
@@ -644,135 +642,10 @@
             bounceArrow.classList.toggle('opacity-50');
         }, 1000);
     </script>
-    <style>
-        /* Custom animations */
-        @keyframes fade-in-up {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        .animate-fade-in-up {
-            animation: fade-in-up 0.5s ease-out forwards;
-        }
-        .animate-bounce {
-            animation: bounce 1s infinite;
-        }
-        @keyframes bounce {
-            0%, 100% {
-                transform: translateY(0);
-            }
-            50% {
-                transform: translateY(-10px);
-            }
-        }
-        /* Custom styles */
-        .bg-gradient-to-r {
-            background: linear-gradient(to right, #1e3a8a, #2563eb);
-        }
-        .bg-gradient-to-r:hover {
-            background: linear-gradient(to right, #1e3a8a, #3b82f6);
-        }
-        .bg-blue-800 {
-            background-color: #1e3a8a;
-        }
-        .bg-blue-700 {
-            background-color: #2563eb;
-        }
-        .bg-blue-600 {
-            background-color: #3b82f6;
-        }
-        .bg-blue-500 {
-            background-color: #60a5fa;
-        }
-        .bg-blue-400 {
-            background-color: #93c5fd;
-        }
-        .bg-blue-300 {
-            background-color: #bfdbfe;
-        }
-        .bg-blue-200 {
-            background-color: #dbeafe;
-        }
-        .bg-blue-100 {
-            background-color: #f0f9ff;
-        }
-        .bg-blue-50 {
-            background-color: #f9fafb;
-        }
-        .text-blue-900 {
-            color: #1e3a8a;
-        }
-        .text-blue-800 {
-            color: #1e40af;
-        }
-        .text-blue-700 {
-            color: #1d4ed8;
-        }   
-        .text-blue-600 {
-            color: #2563eb;
-        }
-        .text-blue-500 {
-            color: #3b82f6;
-        }
-        .text-blue-400 {
-            color: #60a5fa;
-        }
-        .text-blue-300 {
-            color: #93c5fd;
-        }
-        .text-blue-200 {
-            color: #bfdbfe;
-        }
-        .text-blue-100 {
-            color: #dbeafe;
-        }
-        .text-blue-50 {
-            color: #f0f9ff;
-        }
-        .text-blue-900 {
-            color: #1e3a8a;
-        }
-        .text-blue-800 {
-            color: #1e40af;
-        }
-        .text-blue-700 {
-            color: #1d4ed8;
-        }
-        .text-blue-600 {
-            color: #2563eb;
-        }
-        .text-blue-500 {
-            color: #3b82f6;
-        }
-        .text-blue-400 {
-            color: #60a5fa;
-        }
-        .text-blue-300 {
-            color: #93c5fd;
-        }
-        .text-blue-200 {
-            color: #bfdbfe;
-        }
-        .text-blue-100 {
-            color: #dbeafe;
-        }   
-        .text-blue-50 {
-            color: #f0f9ff;
-        }
-        .text-blue-900 {
-            color: #1e3a8a;
-        }
-        .text-blue-800 {
-            color: #1e40af;
-        }
-        .text-blue-700 {
-            color: #1d4ed8;
-        }
+    
+    <!-- No JS needed - using pure CSS for animations and effects -->
+</body>
+</html>
 
 
 

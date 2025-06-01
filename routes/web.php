@@ -82,9 +82,11 @@ Route::middleware('auth')->group(function () {
         Route::get('/dashboard', [App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');
         
         // User management
-        Route::get('/users', [AppHttp\Controllers\Admin\UserController::class, 'index'])->name('users.index');
-        Route::get('/users/{id}/edit', [AppHttp\Controllers\Admin\UserController::class, 'edit'])->name('users.edit');
-        Route::put('/users/{id}', [AppHttp\Controllers\Admin\UserController::class, 'update'])->name('users.update');
+        Route::get('/users', [App\Http\Controllers\Admin\UserController::class, 'index'])->name('users.index');
+        Route::get('/users/create', [App\Http\Controllers\Admin\UserController::class, 'create'])->name('users.create');
+        Route::post('/users', [App\Http\Controllers\Admin\UserController::class, 'store'])->name('users.store');
+        Route::get('/users/{id}/edit', [App\Http\Controllers\Admin\UserController::class, 'edit'])->name('users.edit');
+        Route::put('/users/{id}', [App\Http\Controllers\Admin\UserController::class, 'update'])->name('users.update');
         
         // Students management
         Route::resource('students', App\Http\Controllers\Admin\StudentController::class);
@@ -94,7 +96,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/students/{id}/lessons', [App\Http\Controllers\Admin\StudentLessonController::class, 'store'])->name('students.lessons.store');
         Route::get('/students/{id}/lessons/{lesson}/edit', [App\Http\Controllers\Admin\StudentLessonController::class, 'edit'])->name('students.lessons.edit');
         Route::put('/students/{id}/lessons/{lesson}', [App\Http\Controllers\Admin\StudentLessonController::class, 'update'])->name('students.lessons.update');
-        Route::delete('/students/{id}/lessons/{lesson}', [AppHttp\Controllers\Admin\StudentLessonController::class, 'destroy'])->name('students.lessons.destroy');
+        Route::delete('/students/{id}/lessons/{lesson}', [App\Http\Controllers\Admin\StudentLessonController::class, 'destroy'])->name('students.lessons.destroy');;
         
         // Registrations/lessons
         Route::get('/registrations', [App\Http\Controllers\Admin\RegistrationController::class, 'index'])->name('registrations.index');
@@ -113,9 +115,9 @@ Route::middleware('auth')->group(function () {
         
         // Cancellation routes
         Route::get('/registrations/{id}/cancel', [App\Http\Controllers\Admin\RegistrationController::class, 'showCancelForm'])->name('registrations.cancel.form');
-        Route::post('/registrations/{id}/cancel', [AppHttp\Controllers\Admin\RegistrationController::class, 'cancel'])->name('registrations.cancel');
-        Route::post('/registrations/{id}/cancel-illness', [AppHttp\Controllers\Admin\RegistrationController::class, 'cancelIllness'])->name('registrations.cancel.illness');
-        Route::post('/registrations/{id}/cancel-weather', [AppHttp\Controllers\Admin\RegistrationController::class, 'cancelWeather'])->name('registrations.cancel.weather');
+        Route::post('/registrations/{id}/cancel', [App\Http\Controllers\Admin\RegistrationController::class, 'cancel'])->name('registrations.cancel');;
+        Route::post('/registrations/{id}/cancel-illness', [App\Http\Controllers\Admin\RegistrationController::class, 'cancelIllness'])->name('registrations.cancel.illness');;
+        Route::post('/registrations/{id}/cancel-weather', [App\Http\Controllers\Admin\RegistrationController::class, 'cancelWeather'])->name('registrations.cancel.weather');;
         
         // Instructors
         // Move the schedule routes BEFORE the resource controller to prevent conflicts

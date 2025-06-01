@@ -10,6 +10,7 @@ use App\Models\Instructor;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
@@ -67,6 +68,70 @@ class UserController extends Controller
     }
     
     /**
+     * Show the form for creating a new user.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function create()
+    {
+        return view('admin.users.create');
+    }
+
+    /**
+     * Store a newly created user in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function store(Request $request)
+    {
+        $validatedData = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
+            'password' => 'required|string|min:8|confirmed',
+            'role' => 'required|in:student,instructor,admin',
+        ]);
+        
+        try {
+            DB::beginTransaction();
+            
+            // Create the user
+            $user = User::create([
+                'name' => $validatedData['name'],
+                'email' => $validatedData['email'],
+                'password' => Hash::make($validatedData['password']),
+                'is_admin' => ($validatedData['role'] === 'admin'),
+            ]);
+            
+            // Handle role-specific logic
+            if ($validatedData['role'] === 'instructor') {
+                Instructor::create([
+                    'user_id' => $user->id,
+                    'bio' => $request->input('bio', ''),
+                    'phone' => $request->input('phone', '')
+                ]);
+            } elseif ($validatedData['role'] === 'student') {
+                Student::create([
+                    'user_id' => $user->id,
+                    'phone' => $request->input('student_phone', '')
+                ]);
+            }
+            
+            DB::commit();
+            
+            return redirect()->route('admin.users.index')
+                ->with('success', 'Gebruiker succesvol aangemaakt.');
+                
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error creating user: ' . $e->getMessage());
+            
+            return back()->withInput()
+                ->with('error', 'Er is een fout opgetreden bij het aanmaken van de gebruiker: ' . $e->getMessage());
+        }
+    }
+    
+    /**
      * Show the form for editing a user's role.
      *
      * @param  int  $id
@@ -108,21 +173,40 @@ class UserController extends Controller
             if ($newRole === 'instructor') {
                 // Create instructor if it doesn't exist
                 if (!$user->instructor) {
-                    Instructor::create([
+                    // Check if the instructors table has the 'bio' column
+                    $hasColumn = Schema::hasColumn('instructors', 'bio');
+                    
+                    // Create the instructor with only the required fields
+                    $instructorData = [
                         'user_id' => $user->id,
-                        'bio' => $request->input('bio', ''),
-                        'phone' => $request->input('phone', '')
-                    ]);
+                    ];
+                    
+                    // Only add bio and phone if they exist and are provided
+                    if ($hasColumn && $request->has('bio')) {
+                        $instructorData['bio'] = $request->input('bio');
+                    }
+                    
+                    if (Schema::hasColumn('instructors', 'phone') && $request->has('phone')) {
+                        $instructorData['phone'] = $request->input('phone');
+                    }
+                    
+                    Instructor::create($instructorData);
                 }
             } 
             
             if ($newRole === 'student') {
                 // Create student if it doesn't exist
                 if (!$user->student) {
-                    Student::create([
+                    $studentData = [
                         'user_id' => $user->id,
-                        'phone' => $request->input('student_phone', '')
-                    ]);
+                    ];
+                    
+                    // Only add phone if it exists and is provided
+                    if (Schema::hasColumn('students', 'phone') && $request->has('student_phone')) {
+                        $studentData['phone'] = $request->input('student_phone');
+                    }
+                    
+                    Student::create($studentData);
                 }
             }
             
@@ -133,7 +217,11 @@ class UserController extends Controller
                 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Error changing user role: ' . $e->getMessage());
+            Log::error('Error changing user role: ' . $e->getMessage(), [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request' => $request->all()
+            ]);
             
             return back()->withErrors(['error' => 'Er is een fout opgetreden bij het wijzigen van de gebruikersrol: ' . $e->getMessage()]);
         }

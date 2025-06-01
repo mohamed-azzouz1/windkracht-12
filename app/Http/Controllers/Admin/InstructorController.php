@@ -23,7 +23,7 @@ class InstructorController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Instructor::with('user');
+        $query = Instructor::with('user'); // Eager load the user relationship
         
         // Apply search filter
         if ($request->has('search') && !empty($request->search)) {
